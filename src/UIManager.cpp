@@ -193,19 +193,7 @@ void UIManager::MenuCallback_AutoMode(void* menuRef, void* itemRef) {
     }
     // Open folder
     else if (item == 3) {
-        std::string path = Settings::Instance().GetOutputDirectory();
-        
-#ifdef _WIN32
-        ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-#elif __APPLE__
-        std::string cmd = "open \"" + path + "\"";
-        system(cmd.c_str());
-#else
-        std::string cmd = "xdg-open \"" + path + "\"";
-        system(cmd.c_str());
-#endif
-        
-        UIManager::Instance().ShowNotification("Opening output folder");
+        UIManager::Instance().OpenOutputFolder();
     }
 }
 
@@ -283,17 +271,39 @@ void UIManager::MenuCallback_ShowStatus(void* menuRef, void* itemRef) {
 void UIManager::MenuCallback_OpenFolder(void* menuRef, void* itemRef) {
     (void)menuRef;  // Unused
     (void)itemRef;  // Unused
+    UIManager::Instance().OpenOutputFolder();
+}
+
+void UIManager::OpenOutputFolder() {
     std::string path = Settings::Instance().GetOutputDirectory();
     
 #ifdef _WIN32
+    // Windows: Use ShellExecuteA which is safe from command injection
     ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #elif __APPLE__
-    std::string cmd = "open \"" + path + "\"";
-    system(cmd.c_str());
+    // macOS: Use open command through system() with proper escaping
+    // Replace any single quotes with '\'' to escape them properly
+    std::string escaped_path = path;
+    size_t pos = 0;
+    while ((pos = escaped_path.find('\'', pos)) != std::string::npos) {
+        escaped_path.replace(pos, 1, "'\\''");
+        pos += 4;
+    }
+    std::string cmd = "open '" + escaped_path + "'";
+    int result = system(cmd.c_str());
+    (void)result;  // Unused
 #else
-    std::string cmd = "xdg-open \"" + path + "\"";
-    system(cmd.c_str());
+    // Linux: Use xdg-open with proper escaping
+    std::string escaped_path = path;
+    size_t pos = 0;
+    while ((pos = escaped_path.find('\'', pos)) != std::string::npos) {
+        escaped_path.replace(pos, 1, "'\\''");
+        pos += 4;
+    }
+    std::string cmd = "xdg-open '" + escaped_path + "'";
+    int result = system(cmd.c_str());
+    (void)result;  // Unused
 #endif
     
-    UIManager::Instance().ShowNotification("Opening output folder");
+    ShowNotification("Opening output folder");
 }

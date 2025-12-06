@@ -352,8 +352,10 @@ void Recorder::WriteInt32(int32_t value) {
 }
 
 void Recorder::WriteFloat(float value) {
-    m_currentFile->write(reinterpret_cast<const char*>(&value), 4);
-    m_bytesWritten += 4;
+    // Write float in little-endian format for consistency
+    uint32_t intValue;
+    std::memcpy(&intValue, &value, sizeof(float));
+    WriteUInt32(intValue);
 }
 
 void Recorder::WriteString(const std::string& str) {

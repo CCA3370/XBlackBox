@@ -47,6 +47,9 @@ private:
     // ImGui windows
     void DrawStatusWindow();
     
+    // Helper for opening output folder
+    void OpenOutputFolder();
+    
     // Menu items
     XPLMMenuID m_menuID;
     int m_menuItem_AutoMode;

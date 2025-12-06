@@ -242,13 +242,9 @@ void DatarefManager::ReadCurrentValues() {
             // Handle array datarefs
             for (int i = 0; i < dr.arraySize; i++) {
                 if (dr.type == DatarefType::Float) {
-                    if (dr.ref) {
-                        float values[256];
-                        int count = XPLMGetDatavf(dr.ref, values, i, 1);
-                        m_floatValues.push_back(count > 0 ? values[0] : 0.0f);
-                    } else {
-                        m_floatValues.push_back(0.0f);
-                    }
+                    float values[256];
+                    int count = XPLMGetDatavf(dr.ref, values, i, 1);
+                    m_floatValues.push_back(count > 0 ? values[0] : 0.0f);
                 } else if (dr.type == DatarefType::Int) {
                     int values[256];
                     int count = XPLMGetDatavi(dr.ref, values, i, 1);
