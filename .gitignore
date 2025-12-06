@@ -39,3 +39,22 @@
 
 # debug information files
 *.dwo
+
+# Build directories
+build/
+cmake-build-*/
+.vs/
+.vscode/
+
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# X-Plane plugin output
+*.xpl
+lin.xpl
+mac.xpl
+win.xpl
