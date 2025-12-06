@@ -1,0 +1,183 @@
+name: Build XBlackBox Plugin
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win_x64
+            artifact_name: win.xpl
+          - os: macos-latest
+            platform: mac_x64
+            artifact_name: mac.xpl
+          - os: ubuntu-latest
+            platform: lin_x64
+            artifact_name: lin.xpl
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.16.x'
+      
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgl1-mesa-dev
+      
+      - name: Configure CMake
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+      
+      - name: Build
+        run: |
+          cd build
+          cmake --build . --config Release
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}
+          path: build/${{ matrix.artifact_name }}
+          retention-days: 1
+
+  package:
+    name: Package Fat Plugin
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: win_x64
+          path: artifacts/win_x64
+      
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mac_x64
+          path: artifacts/mac_x64
+      
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lin_x64
+          path: artifacts/lin_x64
+      
+      - name: Create README.txt
+        run: |
+          cat > README.txt << 'EOF'
+          XBlackBox - Flight Data Recorder for X-Plane 12
+          ================================================
+
+          English:
+          --------
+          XBlackBox is a high-performance flight data recorder plugin for X-Plane 12 that
+          records comprehensive flight data in real-time, similar to a real aircraft's
+          flight data recorder (black box).
+
+          Installation:
+          1. Extract the XBlackBox folder to your X-Plane 12/Resources/plugins/ directory
+          2. Start X-Plane 12
+          3. Access XBlackBox from the Plugins menu
+
+          Features:
+          - Real-time recording at configurable intervals (20Hz to 0.2Hz)
+          - Three recording levels: Simple, Normal, and Detailed
+          - Efficient binary format for minimal disk usage
+          - Auto recording mode with customizable start/stop conditions
+          - Full X-Plane menu integration
+
+          Usage:
+          - Open Plugins → XBlackBox menu
+          - Toggle Auto Mode or manually Start/Stop recording
+          - Select Recording Level (Simple/Normal/Detailed)
+          - Configure Recording Interval
+          - View status and open output folder
+
+          Recorded files are saved in: X-Plane 12/Output/XBlackBox/
+
+          For more information, visit: https://github.com/CCA3370/XBlackBox
+
+          License: GNU General Public License v3.0 (see LICENSE.txt)
+
+          
+          中文：
+          ------
+          XBlackBox 是一个用于 X-Plane 12 的高性能飞行数据记录器插件，可实时记录
+          全面的飞行数据，类似于真实飞机的飞行数据记录器（黑匣子）。
+
+          安装：
+          1. 将 XBlackBox 文件夹解压到 X-Plane 12/Resources/plugins/ 目录
+          2. 启动 X-Plane 12
+          3. 从插件菜单访问 XBlackBox
+
+          特性：
+          - 可配置间隔的实时记录（20Hz 至 0.2Hz）
+          - 三个记录级别：简单、正常和详细
+          - 高效的二进制格式，最小化磁盘使用
+          - 自动记录模式，可自定义启动/停止条件
+          - 完整的 X-Plane 菜单集成
+
+          使用方法：
+          - 打开插件 → XBlackBox 菜单
+          - 切换自动模式或手动开始/停止记录
+          - 选择记录级别（简单/正常/详细）
+          - 配置记录间隔
+          - 查看状态并打开输出文件夹
+
+          记录的文件保存在：X-Plane 12/Output/XBlackBox/
+
+          更多信息，请访问：https://github.com/CCA3370/XBlackBox
+
+          许可证：GNU 通用公共许可证 v3.0（见 LICENSE.txt）
+          EOF
+      
+      - name: Copy LICENSE to LICENSE.txt
+        run: |
+          cp LICENSE LICENSE.txt
+      
+      - name: Create fat plugin structure
+        run: |
+          mkdir -p XBlackBox/win_x64
+          mkdir -p XBlackBox/mac_x64
+          mkdir -p XBlackBox/lin_x64
+          
+          # Copy platform-specific plugins
+          cp artifacts/win_x64/win.xpl XBlackBox/win_x64/
+          cp artifacts/mac_x64/mac.xpl XBlackBox/mac_x64/
+          cp artifacts/lin_x64/lin.xpl XBlackBox/lin_x64/
+          
+          # Copy documentation
+          cp README.txt XBlackBox/
+          cp LICENSE.txt XBlackBox/
+          
+          # Create the final zip
+          zip -r XBlackBox.zip XBlackBox/
+      
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: XBlackBox-release
+          path: XBlackBox.zip
+          retention-days: 90

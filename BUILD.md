@@ -254,7 +254,30 @@ It's recommended to build macOS plugins on macOS.
 
 ## Continuous Integration
 
-For CI/CD pipelines:
+This repository includes a GitHub Actions workflow that automatically builds the plugin for all platforms on push to the default branch.
+
+### Automated Builds
+
+The CI workflow (`.github/workflows/build.yml`) automatically:
+1. Builds the plugin for Windows, macOS, and Linux
+2. Creates a fat plugin package with the X-Plane standard structure:
+   ```
+   XBlackBox.zip/
+       XBlackBox/
+           win_x64/
+               XBlackBox.xpl
+           mac_x64/
+               XBlackBox.xpl
+           lin_x64/
+               XBlackBox.xpl
+           README.txt (bilingual English/Chinese)
+           LICENSE.txt
+   ```
+3. Uploads the package as an artifact (available for 90 days)
+
+### Manual CI Commands
+
+For manual CI/CD pipelines:
 
 ```bash
 # One-line build
