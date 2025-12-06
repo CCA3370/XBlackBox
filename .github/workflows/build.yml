@@ -163,10 +163,10 @@ jobs:
           mkdir -p XBlackBox/mac_x64
           mkdir -p XBlackBox/lin_x64
           
-          # Copy platform-specific plugins
-          cp artifacts/win_x64/win.xpl XBlackBox/win_x64/
-          cp artifacts/mac_x64/mac.xpl XBlackBox/mac_x64/
-          cp artifacts/lin_x64/lin.xpl XBlackBox/lin_x64/
+          # Copy platform-specific plugins and rename to XBlackBox.xpl
+          cp artifacts/win_x64/win.xpl XBlackBox/win_x64/XBlackBox.xpl
+          cp artifacts/mac_x64/mac.xpl XBlackBox/mac_x64/XBlackBox.xpl
+          cp artifacts/lin_x64/lin.xpl XBlackBox/lin_x64/XBlackBox.xpl
           
           # Copy documentation
           cp README.txt XBlackBox/
