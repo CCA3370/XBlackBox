@@ -50,11 +50,21 @@ jobs:
           cd build
           cmake --build . --config Release
       
+      - name: Locate built plugin
+        id: locate
+        shell: bash
+        run: |
+          if [ -f "build/Release/${{ matrix.artifact_name }}" ]; then
+            echo "plugin_path=build/Release/${{ matrix.artifact_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "plugin_path=build/${{ matrix.artifact_name }}" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}
-          path: build/${{ matrix.artifact_name }}
+          path: ${{ steps.locate.outputs.plugin_path }}
           retention-days: 1
 
   package:
@@ -164,9 +174,10 @@ jobs:
           mkdir -p XBlackBox/lin_x64
           
           # Copy platform-specific plugins and rename to XBlackBox.xpl
-          cp artifacts/win_x64/win.xpl XBlackBox/win_x64/XBlackBox.xpl
-          cp artifacts/mac_x64/mac.xpl XBlackBox/mac_x64/XBlackBox.xpl
-          cp artifacts/lin_x64/lin.xpl XBlackBox/lin_x64/XBlackBox.xpl
+          # Using wildcards to handle any .xpl file in each artifact directory
+          cp artifacts/win_x64/*.xpl XBlackBox/win_x64/XBlackBox.xpl
+          cp artifacts/mac_x64/*.xpl XBlackBox/mac_x64/XBlackBox.xpl
+          cp artifacts/lin_x64/*.xpl XBlackBox/lin_x64/XBlackBox.xpl
           
           # Copy documentation
           cp README.txt XBlackBox/
