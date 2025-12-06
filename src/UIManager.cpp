@@ -66,10 +66,10 @@ void UIManager::CreateMenu() {
         return;
     }
     
-    // Create our submenu
+    // Create our submenu with menu handler
     int menuIndex = XPLMAppendMenuItem(pluginsMenu, "XBlackBox", nullptr, 0);
     m_menuID = XPLMCreateMenu("XBlackBox", pluginsMenu, menuIndex, 
-                               [](void*, void*){}, nullptr);
+                               MenuCallback_AutoMode, nullptr);
     
     if (!m_menuID) {
         LogError("Failed to create menu");
@@ -78,33 +78,30 @@ void UIManager::CreateMenu() {
     
     // Auto mode toggle
     m_menuItem_AutoMode = XPLMAppendMenuItem(m_menuID, "Auto Mode: OFF", 
-                                              reinterpret_cast<void*>(this), 0);
-    XPLMSetMenuItemName(m_menuID, m_menuItem_AutoMode, 
-                        Settings::Instance().GetAutoMode() ? "Auto Mode: ON" : "Auto Mode: OFF", 0);
+                                              reinterpret_cast<void*>(0), 0);
     
     // Start/Stop recording
     m_menuItem_StartStop = XPLMAppendMenuItem(m_menuID, "Start Recording", 
-                                               reinterpret_cast<void*>(this), 0);
+                                               reinterpret_cast<void*>(1), 0);
     
     // Separator
     XPLMAppendMenuSeparator(m_menuID);
     
     // Recording level submenu
-    XPLMMenuID levelMenu = XPLMCreateMenu("Recording Level", m_menuID, 
-                                           XPLMAppendMenuItem(m_menuID, "Recording Level", nullptr, 0),
-                                           [](void*, void*){}, nullptr);
+    int levelMenuItem = XPLMAppendMenuItem(m_menuID, "Recording Level", nullptr, 0);
+    XPLMMenuID levelMenu = XPLMCreateMenu("Recording Level", m_menuID, levelMenuItem,
+                                           MenuCallback_LevelSimple, nullptr);
     XPLMAppendMenuItem(levelMenu, "Simple (Basic flight data)", 
                        reinterpret_cast<void*>(1), 0);
     XPLMAppendMenuItem(levelMenu, "Normal (+ Controls & systems)", 
                        reinterpret_cast<void*>(2), 0);
     XPLMAppendMenuItem(levelMenu, "Detailed (Everything)", 
                        reinterpret_cast<void*>(3), 0);
-    XPLMSetMenuHandler(levelMenu, MenuCallback_LevelSimple);
     
     // Recording interval submenu
-    XPLMMenuID intervalMenu = XPLMCreateMenu("Recording Interval", m_menuID,
-                                              XPLMAppendMenuItem(m_menuID, "Recording Interval", nullptr, 0),
-                                              [](void*, void*){}, nullptr);
+    int intervalMenuItem = XPLMAppendMenuItem(m_menuID, "Recording Interval", nullptr, 0);
+    XPLMMenuID intervalMenu = XPLMCreateMenu("Recording Interval", m_menuID, intervalMenuItem,
+                                              MenuCallback_Interval20Hz, nullptr);
     XPLMAppendMenuItem(intervalMenu, "20 Hz (0.05 sec) - Very Fast", 
                        reinterpret_cast<void*>(20), 0);
     XPLMAppendMenuItem(intervalMenu, "10 Hz (0.10 sec) - Fast", 
@@ -113,21 +110,17 @@ void UIManager::CreateMenu() {
                        reinterpret_cast<void*>(4), 0);
     XPLMAppendMenuItem(intervalMenu, "1 Hz (1.0 sec) - Slow", 
                        reinterpret_cast<void*>(1), 0);
-    XPLMSetMenuHandler(intervalMenu, MenuCallback_Interval20Hz);
     
     // Separator
     XPLMAppendMenuSeparator(m_menuID);
     
     // Show status
     m_menuItem_ShowStatus = XPLMAppendMenuItem(m_menuID, "Show Status", 
-                                                reinterpret_cast<void*>(this), 0);
+                                                reinterpret_cast<void*>(2), 0);
     
     // Open output folder
     XPLMAppendMenuItem(m_menuID, "Open Output Folder", 
-                       reinterpret_cast<void*>(this), 0);
-    
-    // Set menu handler
-    XPLMSetMenuHandler(m_menuID, MenuCallback_AutoMode);
+                       reinterpret_cast<void*>(3), 0);
     
     UpdateMenu();
 }
@@ -172,11 +165,11 @@ void UIManager::DrawStatusWindow() {
 
 // Menu callbacks
 void UIManager::MenuCallback_AutoMode(void* menuRef, void* itemRef) {
-    int item = XPLMCheckMenuItem(reinterpret_cast<XPLMMenuID>(menuRef), 
-                                   reinterpret_cast<intptr_t>(itemRef));
+    (void)menuRef;  // Unused
+    int item = reinterpret_cast<intptr_t>(itemRef);
     
     // Auto mode toggle
-    if (item == UIManager::Instance().m_menuItem_AutoMode) {
+    if (item == 0) {
         bool newMode = !Settings::Instance().GetAutoMode();
         Settings::Instance().SetAutoMode(newMode);
         Settings::Instance().Save();
@@ -184,7 +177,7 @@ void UIManager::MenuCallback_AutoMode(void* menuRef, void* itemRef) {
         UIManager::Instance().ShowNotification("Auto mode " + std::string(newMode ? "enabled" : "disabled"));
     }
     // Start/Stop recording
-    else if (item == UIManager::Instance().m_menuItem_StartStop) {
+    else if (item == 1) {
         if (Recorder::Instance().IsRecording()) {
             Recorder::Instance().Stop();
             UIManager::Instance().ShowNotification("Recording stopped");
@@ -195,12 +188,29 @@ void UIManager::MenuCallback_AutoMode(void* menuRef, void* itemRef) {
         UIManager::Instance().UpdateMenu();
     }
     // Show status
-    else if (item == UIManager::Instance().m_menuItem_ShowStatus) {
+    else if (item == 2) {
         UIManager::Instance().m_showStatusWindow = !UIManager::Instance().m_showStatusWindow;
+    }
+    // Open folder
+    else if (item == 3) {
+        std::string path = Settings::Instance().GetOutputDirectory();
+        
+#ifdef _WIN32
+        ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#elif __APPLE__
+        std::string cmd = "open \"" + path + "\"";
+        system(cmd.c_str());
+#else
+        std::string cmd = "xdg-open \"" + path + "\"";
+        system(cmd.c_str());
+#endif
+        
+        UIManager::Instance().ShowNotification("Opening output folder");
     }
 }
 
 void UIManager::MenuCallback_LevelSimple(void* menuRef, void* itemRef) {
+    (void)menuRef;  // Unused
     int item = reinterpret_cast<intptr_t>(itemRef);
     
     RecordingLevel level;
@@ -234,6 +244,7 @@ void UIManager::MenuCallback_LevelDetailed(void* menuRef, void* itemRef) {
 }
 
 void UIManager::MenuCallback_Interval20Hz(void* menuRef, void* itemRef) {
+    (void)menuRef;  // Unused
     int hz = reinterpret_cast<intptr_t>(itemRef);
     float interval;
     std::string name;
@@ -264,10 +275,14 @@ void UIManager::MenuCallback_Interval1Hz(void* menuRef, void* itemRef) {
 }
 
 void UIManager::MenuCallback_ShowStatus(void* menuRef, void* itemRef) {
+    (void)menuRef;  // Unused
+    (void)itemRef;  // Unused
     UIManager::Instance().m_showStatusWindow = !UIManager::Instance().m_showStatusWindow;
 }
 
 void UIManager::MenuCallback_OpenFolder(void* menuRef, void* itemRef) {
+    (void)menuRef;  // Unused
+    (void)itemRef;  // Unused
     std::string path = Settings::Instance().GetOutputDirectory();
     
 #ifdef _WIN32

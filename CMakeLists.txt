@@ -89,7 +89,12 @@ elseif(APPLE)
     )
 else()
     target_compile_definitions(XBlackBox PRIVATE LIN=1 XPLM420=1 XPLM400=1 XPLM301=1 XPLM300=1 XPLM210=1 XPLM200=1)
-    target_link_libraries(XBlackBox GL)
+    find_library(OPENGL_LIBRARY NAMES GL PATHS /usr/lib/x86_64-linux-gnu /usr/lib)
+    if(OPENGL_LIBRARY)
+        target_link_libraries(XBlackBox ${OPENGL_LIBRARY})
+    else()
+        message(STATUS "OpenGL library not found, plugin may not link correctly")
+    endif()
 endif()
 
 # Compiler flags

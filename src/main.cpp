@@ -83,12 +83,19 @@ PLUGIN_API void XPluginDisable(void) {
 }
 
 PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFrom, int inMsg, void* inParam) {
+    (void)inFrom;   // Unused
+    (void)inMsg;    // Unused
+    (void)inParam;  // Unused
     // Handle messages if needed
     // For now, we don't need to handle any specific messages
 }
 
 // Flight loop callback - called every frame
 static float FlightLoopCallback(float elapsedMe, float elapsedSim, int counter, void* refcon) {
+    (void)elapsedMe;  // Unused
+    (void)counter;    // Unused
+    (void)refcon;     // Unused
+    
     // Update recorder
     Recorder::Instance().Update(elapsedSim);
     

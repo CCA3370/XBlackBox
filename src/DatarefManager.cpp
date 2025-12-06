@@ -242,7 +242,6 @@ void DatarefManager::ReadCurrentValues() {
             // Handle array datarefs
             for (int i = 0; i < dr.arraySize; i++) {
                 if (dr.type == DatarefType::Float) {
-                    float val = XPLMGetDatavf(dr.ref, nullptr, 0, 0);
                     if (dr.ref) {
                         float values[256];
                         int count = XPLMGetDatavf(dr.ref, values, i, 1);
