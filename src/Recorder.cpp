@@ -39,6 +39,11 @@ bool Recorder::Start() {
     // Create filename with timestamp
     std::time_t now = std::time(nullptr);
     std::tm* tm = std::localtime(&now);
+    if (!tm) {
+        LogError("Failed to get local time");
+        return false;
+    }
+    
     std::ostringstream filename;
     filename << Settings::Instance().GetFilePrefix()
              << std::put_time(tm, "%Y%m%d_%H%M%S")
@@ -49,14 +54,37 @@ bool Recorder::Start() {
     // Open file in binary mode
     m_currentFile = std::make_unique<std::ofstream>(m_currentFilePath, 
                                                      std::ios::binary | std::ios::out);
-    if (!m_currentFile->is_open()) {
+    if (!m_currentFile || !m_currentFile->is_open()) {
         LogError("Could not create recording file: " + m_currentFilePath);
         m_currentFile.reset();
         return false;
     }
     
-    // Write header
-    WriteHeader();
+    // Verify file is writable
+    if (!m_currentFile->good()) {
+        LogError("File stream is not in good state: " + m_currentFilePath);
+        m_currentFile->close();
+        m_currentFile.reset();
+        return false;
+    }
+    
+    // Write header with error checking
+    try {
+        WriteHeader();
+    } catch (const std::exception& e) {
+        LogError(std::string("Exception writing header: ") + e.what());
+        m_currentFile->close();
+        m_currentFile.reset();
+        return false;
+    }
+    
+    // Verify header was written successfully
+    if (!m_currentFile->good()) {
+        LogError("File write failed during header write");
+        m_currentFile->close();
+        m_currentFile.reset();
+        return false;
+    }
     
     // Set state
     m_isRecording = true;
@@ -77,14 +105,28 @@ bool Recorder::Stop() {
     }
     
     // Flush any remaining buffered data
-    FlushBuffer();
+    try {
+        FlushBuffer();
+    } catch (const std::exception& e) {
+        LogError(std::string("Exception flushing buffer: ") + e.what());
+    }
     
-    // Write footer
-    WriteFooter();
+    // Write footer with error checking
+    try {
+        WriteFooter();
+    } catch (const std::exception& e) {
+        LogError(std::string("Exception writing footer: ") + e.what());
+    }
     
-    // Close file
+    // Close file safely
     if (m_currentFile) {
-        m_currentFile->close();
+        try {
+            if (m_currentFile->is_open()) {
+                m_currentFile->close();
+            }
+        } catch (const std::exception& e) {
+            LogError(std::string("Exception closing file: ") + e.what());
+        }
         m_currentFile.reset();
     }
     
@@ -98,7 +140,14 @@ bool Recorder::Stop() {
 }
 
 void Recorder::Update(float deltaTime) {
-    XPLMDataRef timeRef = XPLMFindDataRef("sim/time/total_running_time_sec");
+    // Cache time dataref for efficiency (avoid repeated lookups)
+    static XPLMDataRef timeRef = XPLMFindDataRef("sim/time/total_running_time_sec");
+    if (!timeRef) {
+        // Critical dataref missing - should not happen, but handle gracefully
+        LogError("Critical dataref 'sim/time/total_running_time_sec' not found");
+        return;
+    }
+    
     float currentTime = XPLMGetDataf(timeRef);
     
     // Update last update time
@@ -141,10 +190,22 @@ int Recorder::GetDuration() const {
 }
 
 void Recorder::WriteHeader() {
-    if (!m_currentFile) return;
+    if (!m_currentFile) {
+        LogError("WriteHeader called with null file");
+        return;
+    }
+    
+    if (!m_currentFile->good()) {
+        LogError("File stream not in good state in WriteHeader");
+        return;
+    }
     
     // Magic number "XFDR" (note: keeping XFDR for compatibility, file extension is .xdr)
     m_currentFile->write("XFDR", 4);
+    if (!m_currentFile->good()) {
+        LogError("Failed to write magic number");
+        return;
+    }
     m_bytesWritten += 4;
     
     // Version (2 bytes)
@@ -165,10 +226,19 @@ void Recorder::WriteHeader() {
     
     // Write dataref definitions
     for (const auto& dr : datarefs) {
+        // Validate name length
+        if (dr.name.length() > 65535) {
+            LogError("Dataref name too long: " + dr.name);
+            continue;
+        }
+        
         // Name length (2 bytes)
         WriteUInt16(static_cast<uint16_t>(dr.name.length()));
         // Name (string)
         m_currentFile->write(dr.name.c_str(), dr.name.length());
+        if (!m_currentFile->good()) {
+            LogError("Failed to write dataref name: " + dr.name);
+        }
         m_bytesWritten += dr.name.length();
         
         // Type (1 byte: 0=float, 1=int, 2=string)
@@ -180,14 +250,30 @@ void Recorder::WriteHeader() {
         WriteUInt8(static_cast<uint8_t>(dr.arraySize));
     }
     
-    m_currentFile->flush();
+    if (m_currentFile->good()) {
+        m_currentFile->flush();
+    } else {
+        LogError("File stream error after writing header");
+    }
 }
 
 void Recorder::WriteFooter() {
-    if (!m_currentFile) return;
+    if (!m_currentFile) {
+        LogError("WriteFooter called with null file");
+        return;
+    }
+    
+    if (!m_currentFile->good()) {
+        LogError("File stream not in good state in WriteFooter");
+        return;
+    }
     
     // Footer marker "ENDR"
     m_currentFile->write("ENDR", 4);
+    if (!m_currentFile->good()) {
+        LogError("Failed to write footer marker");
+        return;
+    }
     m_bytesWritten += 4;
     
     // Total records (4 bytes)
@@ -196,25 +282,50 @@ void Recorder::WriteFooter() {
     // End timestamp (8 bytes)
     WriteUInt64(static_cast<uint64_t>(std::time(nullptr)));
     
-    m_currentFile->flush();
+    if (m_currentFile->good()) {
+        m_currentFile->flush();
+    } else {
+        LogError("File stream error after writing footer");
+    }
 }
 
 void Recorder::RecordFrame() {
-    if (!m_currentFile) return;
+    if (!m_currentFile) {
+        LogError("RecordFrame called with null file");
+        return;
+    }
+    
+    // Check if file is still good
+    if (!m_currentFile->good()) {
+        LogError("File stream is in bad state, stopping recording");
+        Stop();
+        return;
+    }
     
     // Read current dataref values
-    DatarefManager::Instance().ReadCurrentValues();
+    try {
+        DatarefManager::Instance().ReadCurrentValues();
+    } catch (const std::exception& e) {
+        LogError(std::string("Exception reading dataref values: ") + e.what());
+        // Continue with partial data rather than crashing
+    }
     
     // Frame marker "DATA"
     m_currentFile->write("DATA", 4);
     m_bytesWritten += 4;
     
     // Timestamp (4 bytes float - relative to start)
-    XPLMDataRef timeRef = XPLMFindDataRef("sim/time/total_running_time_sec");
-    float relativeTime = XPLMGetDataf(timeRef);
-    WriteFloat(relativeTime);
+    static XPLMDataRef timeRef = XPLMFindDataRef("sim/time/total_running_time_sec");
+    if (timeRef) {
+        float relativeTime = XPLMGetDataf(timeRef);
+        WriteFloat(relativeTime);
+    } else {
+        // Fallback if dataref not available
+        WriteFloat(0.0f);
+        LogError("Time dataref not available in RecordFrame");
+    }
     
-    // Write all dataref values
+    // Write all dataref values with bounds checking
     const auto& datarefs = DatarefManager::Instance().GetDatarefs();
     const auto& floatVals = DatarefManager::Instance().GetFloatValues();
     const auto& intVals = DatarefManager::Instance().GetIntValues();
@@ -226,22 +337,47 @@ void Recorder::RecordFrame() {
     
     for (const auto& dr : datarefs) {
         if (dr.arraySize > 0) {
-            // Write array values
+            // Write array values with bounds checking
             for (int i = 0; i < dr.arraySize; i++) {
                 if (dr.type == DatarefType::Float) {
-                    WriteFloat(floatVals[floatIdx++]);
+                    if (floatIdx < floatVals.size()) {
+                        WriteFloat(floatVals[floatIdx++]);
+                    } else {
+                        WriteFloat(0.0f); // Safety fallback
+                        LogError("Float array index out of bounds");
+                    }
                 } else if (dr.type == DatarefType::Int) {
-                    WriteInt32(intVals[intIdx++]);
+                    if (intIdx < intVals.size()) {
+                        WriteInt32(intVals[intIdx++]);
+                    } else {
+                        WriteInt32(0); // Safety fallback
+                        LogError("Int array index out of bounds");
+                    }
                 }
             }
         } else {
-            // Write single value
+            // Write single value with bounds checking
             if (dr.type == DatarefType::Float) {
-                WriteFloat(floatVals[floatIdx++]);
+                if (floatIdx < floatVals.size()) {
+                    WriteFloat(floatVals[floatIdx++]);
+                } else {
+                    WriteFloat(0.0f);
+                    LogError("Float index out of bounds");
+                }
             } else if (dr.type == DatarefType::Int) {
-                WriteInt32(intVals[intIdx++]);
+                if (intIdx < intVals.size()) {
+                    WriteInt32(intVals[intIdx++]);
+                } else {
+                    WriteInt32(0);
+                    LogError("Int index out of bounds");
+                }
             } else if (dr.type == DatarefType::String) {
-                WriteString(stringVals[stringIdx++]);
+                if (stringIdx < stringVals.size()) {
+                    WriteString(stringVals[stringIdx++]);
+                } else {
+                    WriteString("");
+                    LogError("String index out of bounds");
+                }
             }
         }
     }
@@ -250,7 +386,9 @@ void Recorder::RecordFrame() {
     
     // Flush periodically
     if (m_recordCount % FLUSH_INTERVAL == 0) {
-        m_currentFile->flush();
+        if (m_currentFile->good()) {
+            m_currentFile->flush();
+        }
     }
 }
 
@@ -259,24 +397,35 @@ bool Recorder::CheckAutoStartCondition() {
     float threshold = Settings::Instance().GetAutoStartThreshold();
     
     if (condition == AutoCondition::GroundSpeed) {
-        XPLMDataRef gsRef = XPLMFindDataRef("sim/flightmodel/position/groundspeed");
+        static XPLMDataRef gsRef = XPLMFindDataRef("sim/flightmodel/position/groundspeed");
+        if (!gsRef) {
+            LogError("Ground speed dataref not found");
+            return false;
+        }
         float gs = XPLMGetDataf(gsRef);
         return gs > threshold;
     } else if (condition == AutoCondition::EngineRunning) {
         // Check if any engine is running
-        XPLMDataRef engRef = XPLMFindDataRef("sim/flightmodel/engine/ENGN_running");
-        if (engRef) {
-            for (int i = 0; i < MAX_ENGINES; i++) {
-                int running[1];
-                XPLMGetDatavi(engRef, running, i, 1);
-                if (running[0] == 1) {
-                    return true;
-                }
+        static XPLMDataRef engRef = XPLMFindDataRef("sim/flightmodel/engine/ENGN_running");
+        if (!engRef) {
+            LogError("Engine running dataref not found");
+            return false;
+        }
+        
+        for (int i = 0; i < MAX_ENGINES; i++) {
+            int running[1] = {0};
+            int count = XPLMGetDatavi(engRef, running, i, 1);
+            if (count > 0 && running[0] == 1) {
+                return true;
             }
         }
         return false;
     } else if (condition == AutoCondition::WeightOnWheels) {
-        XPLMDataRef wowRef = XPLMFindDataRef("sim/flightmodel/failures/onground_any");
+        static XPLMDataRef wowRef = XPLMFindDataRef("sim/flightmodel/failures/onground_any");
+        if (!wowRef) {
+            LogError("Weight on wheels dataref not found");
+            return false;
+        }
         int onGround = XPLMGetDatai(wowRef);
         return onGround == 0;  // Not on ground
     }
@@ -289,24 +438,35 @@ bool Recorder::CheckAutoStopCondition() {
     float threshold = Settings::Instance().GetAutoStopThreshold();
     
     if (condition == AutoCondition::GroundSpeed) {
-        XPLMDataRef gsRef = XPLMFindDataRef("sim/flightmodel/position/groundspeed");
+        static XPLMDataRef gsRef = XPLMFindDataRef("sim/flightmodel/position/groundspeed");
+        if (!gsRef) {
+            LogError("Ground speed dataref not found in auto stop");
+            return false;
+        }
         float gs = XPLMGetDataf(gsRef);
         return gs < threshold;
     } else if (condition == AutoCondition::EngineRunning) {
         // Check if all engines are stopped
-        XPLMDataRef engRef = XPLMFindDataRef("sim/flightmodel/engine/ENGN_running");
-        if (engRef) {
-            for (int i = 0; i < MAX_ENGINES; i++) {
-                int running[1];
-                XPLMGetDatavi(engRef, running, i, 1);
-                if (running[0] == 1) {
-                    return false;
-                }
+        static XPLMDataRef engRef = XPLMFindDataRef("sim/flightmodel/engine/ENGN_running");
+        if (!engRef) {
+            LogError("Engine running dataref not found in auto stop");
+            return false;
+        }
+        
+        for (int i = 0; i < MAX_ENGINES; i++) {
+            int running[1] = {0};
+            int count = XPLMGetDatavi(engRef, running, i, 1);
+            if (count > 0 && running[0] == 1) {
+                return false;
             }
         }
         return true;
     } else if (condition == AutoCondition::WeightOnWheels) {
-        XPLMDataRef wowRef = XPLMFindDataRef("sim/flightmodel/failures/onground_any");
+        static XPLMDataRef wowRef = XPLMFindDataRef("sim/flightmodel/failures/onground_any");
+        if (!wowRef) {
+            LogError("Weight on wheels dataref not found in auto stop");
+            return false;
+        }
         int onGround = XPLMGetDatai(wowRef);
         return onGround == 1;  // On ground
     }

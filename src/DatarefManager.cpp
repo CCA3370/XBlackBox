@@ -1,4 +1,5 @@
 #include "DatarefManager.h"
+#include <cmath>
 
 DatarefManager& DatarefManager::Instance() {
     static DatarefManager instance;
@@ -314,29 +315,52 @@ void DatarefManager::ReadCurrentValues() {
     m_stringValues.clear();
     
     for (const auto& dr : m_datarefs) {
+        // Check if dataref reference is valid
+        if (!dr.ref) {
+            // Handle missing dataref gracefully
+            if (dr.type == DatarefType::Float) {
+                for (int i = 0; i < (dr.arraySize > 0 ? dr.arraySize : 1); i++) {
+                    m_floatValues.push_back(0.0f);
+                }
+            } else if (dr.type == DatarefType::Int) {
+                for (int i = 0; i < (dr.arraySize > 0 ? dr.arraySize : 1); i++) {
+                    m_intValues.push_back(0);
+                }
+            } else if (dr.type == DatarefType::String) {
+                m_stringValues.push_back("");
+            }
+            continue;
+        }
+        
         if (dr.arraySize > 0) {
-            // Handle array datarefs
+            // Handle array datarefs with bounds checking
             for (int i = 0; i < dr.arraySize; i++) {
                 if (dr.type == DatarefType::Float) {
-                    float values[256];
+                    float values[256] = {0};
                     int count = XPLMGetDatavf(dr.ref, values, i, 1);
                     m_floatValues.push_back(count > 0 ? values[0] : 0.0f);
                 } else if (dr.type == DatarefType::Int) {
-                    int values[256];
+                    int values[256] = {0};
                     int count = XPLMGetDatavi(dr.ref, values, i, 1);
                     m_intValues.push_back(count > 0 ? values[0] : 0);
                 }
             }
         } else {
-            // Handle single value datarefs
+            // Handle single value datarefs with error checking
             if (dr.type == DatarefType::Float) {
-                m_floatValues.push_back(XPLMGetDataf(dr.ref));
+                float value = XPLMGetDataf(dr.ref);
+                // Check for invalid float values (NaN, infinity)
+                if (std::isnan(value) || std::isinf(value)) {
+                    value = 0.0f;
+                }
+                m_floatValues.push_back(value);
             } else if (dr.type == DatarefType::Int) {
-                m_intValues.push_back(XPLMGetDatai(dr.ref));
+                int value = XPLMGetDatai(dr.ref);
+                m_intValues.push_back(value);
             } else if (dr.type == DatarefType::String) {
-                char buffer[512];
+                char buffer[512] = {0};
                 int len = XPLMGetDatab(dr.ref, buffer, 0, sizeof(buffer) - 1);
-                if (len > 0) {
+                if (len > 0 && len < static_cast<int>(sizeof(buffer))) {
                     buffer[len] = '\0';
                     m_stringValues.push_back(std::string(buffer));
                 } else {
