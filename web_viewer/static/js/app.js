@@ -429,6 +429,20 @@ async function loadFlightAnalysis() {
             <span class="stat-value">${result.max_speed.toFixed(1)} kts</span>
         </div>`;
         
+        if (result.max_climb_rate) {
+            html += `<div class="stat-item">
+                <span class="stat-label">Max Climb Rate</span>
+                <span class="stat-value">${result.max_climb_rate.toFixed(0)} fpm</span>
+            </div>`;
+        }
+        
+        if (result.max_descent_rate) {
+            html += `<div class="stat-item">
+                <span class="stat-label">Max Descent Rate</span>
+                <span class="stat-value">${result.max_descent_rate.toFixed(0)} fpm</span>
+            </div>`;
+        }
+        
         if (result.average_fuel_flow) {
             html += `<div class="stat-item">
                 <span class="stat-label">Avg Fuel Flow</span>
@@ -437,14 +451,40 @@ async function loadFlightAnalysis() {
         }
         
         if (result.landing_g_force) {
+            const gColor = result.landing_g_force > 2.0 ? 'color: #ff6b6b;' : '';
             html += `<div class="stat-item">
                 <span class="stat-label">Landing G-Force</span>
-                <span class="stat-value">${result.landing_g_force.toFixed(2)}G</span>
+                <span class="stat-value" style="${gColor}">${result.landing_g_force.toFixed(2)}G</span>
             </div>`;
         }
         
         html += '</div></div>';
 
+        // Approach Analysis
+        if (result.approach_analysis) {
+            const approach = result.approach_analysis;
+            const stableClass = approach.stable_approach ? 'stable' : 'unstable';
+            html += '<div class="analysis-section approach-analysis">';
+            html += '<h4><i class="fas fa-plane-arrival"></i> Approach Analysis</h4>';
+            html += '<div class="approach-stats">';
+            html += `<div class="approach-item">
+                <span class="approach-label">Approach Stability:</span>
+                <span class="approach-value ${stableClass}">
+                    ${approach.stable_approach ? '✓ Stable' : '⚠ Unstable'}
+                </span>
+            </div>`;
+            html += `<div class="approach-item">
+                <span class="approach-label">Avg Descent Rate:</span>
+                <span class="approach-value">${Math.abs(approach.average_descent_rate).toFixed(0)} fpm</span>
+            </div>`;
+            html += `<div class="approach-item">
+                <span class="approach-label">Touchdown Speed:</span>
+                <span class="approach-value">${approach.touchdown_speed.toFixed(1)} kts</span>
+            </div>`;
+            html += '</div></div>';
+        }
+
+        // Flight Phases
         if (result.phases && result.phases.length > 0) {
             html += '<div class="analysis-phases">';
             html += '<h4><i class="fas fa-list"></i> Flight Phases</h4>';
@@ -464,6 +504,28 @@ async function loadFlightAnalysis() {
             
             html += '</tbody></table>';
             html += '</div>';
+        }
+
+        // Anomalies
+        if (result.anomalies && result.anomalies.length > 0) {
+            html += '<div class="analysis-section anomalies-section">';
+            html += '<h4><i class="fas fa-exclamation-triangle"></i> Detected Anomalies</h4>';
+            html += '<div class="anomalies-list">';
+            
+            result.anomalies.forEach(anomaly => {
+                const severityClass = `severity-${anomaly.severity}`;
+                const timeMin = (anomaly.timestamp / 60).toFixed(1);
+                html += `<div class="anomaly-item ${severityClass}">
+                    <div class="anomaly-header">
+                        <span class="anomaly-severity">${anomaly.severity.toUpperCase()}</span>
+                        <span class="anomaly-time">${timeMin} min</span>
+                    </div>
+                    <div class="anomaly-desc">${anomaly.description}</div>
+                    <div class="anomaly-detail">${anomaly.parameter}: ${anomaly.value.toFixed(1)}</div>
+                </div>`;
+            });
+            
+            html += '</div></div>';
         }
 
         container.innerHTML = html;

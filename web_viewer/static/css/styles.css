@@ -1510,3 +1510,122 @@ body.drag-active::after {
 .phases-table td:first-child {
     color: var(--text-primary);
 }
+
+/* Approach Analysis Styles */
+.analysis-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.analysis-section h4 {
+    margin: 0 0 15px 0;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.approach-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.approach-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+.approach-label {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.approach-value {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.approach-value.stable {
+    color: #4ecdc4;
+}
+
+.approach-value.unstable {
+    color: #ff6b6b;
+}
+
+/* Anomalies Styles */
+.anomalies-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.anomaly-item {
+    padding: 12px;
+    border-radius: 6px;
+    border-left: 4px solid;
+    background: var(--bg-tertiary);
+}
+
+.anomaly-item.severity-low {
+    border-left-color: #ffe66d;
+}
+
+.anomaly-item.severity-medium {
+    border-left-color: #fd79a8;
+}
+
+.anomaly-item.severity-high {
+    border-left-color: #ff6b6b;
+}
+
+.anomaly-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.anomaly-severity {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: rgba(255, 107, 107, 0.2);
+    color: #ff6b6b;
+}
+
+.anomaly-item.severity-medium .anomaly-severity {
+    background: rgba(253, 121, 168, 0.2);
+    color: #fd79a8;
+}
+
+.anomaly-item.severity-low .anomaly-severity {
+    background: rgba(255, 230, 109, 0.2);
+    color: #ffe66d;
+}
+
+.anomaly-time {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.anomaly-desc {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.anomaly-detail {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-family: 'Courier New', monospace;
+}

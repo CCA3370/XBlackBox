@@ -187,6 +187,27 @@ struct FlightPhase {
     start_time: f32,
     end_time: f32,
     duration: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    average_altitude: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    average_speed: Option<f64>,
+}
+
+#[derive(Debug, Serialize)]
+struct ApproachAnalysis {
+    stable_approach: bool,
+    average_descent_rate: f64,
+    touchdown_speed: f64,
+    final_approach_altitude: f64,
+}
+
+#[derive(Debug, Serialize)]
+struct Anomaly {
+    timestamp: f32,
+    severity: String, // "low", "medium", "high"
+    description: String,
+    parameter: String,
+    value: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -197,6 +218,13 @@ struct FlightAnalysis {
     max_speed: f64,
     average_fuel_flow: Option<f64>,
     landing_g_force: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_climb_rate: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_descent_rate: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    approach_analysis: Option<ApproachAnalysis>,
+    anomalies: Vec<Anomaly>,
 }
 
 // Constants for flight phase detection
@@ -241,10 +269,12 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
     let mut fuel_flow_sum = 0.0;
     let mut fuel_flow_count = 0;
     let mut landing_g = None;
+    let mut altitudes = Vec::new(); // Store for later use
 
     // Get altitude and speed data if available
     if let Some(alt_i) = alt_idx {
-        let (_, altitudes) = data.get_parameter_data(alt_i, 0, None, 1);
+        let (_, alts) = data.get_parameter_data(alt_i, 0, None, 1);
+        altitudes = alts.clone();
         max_altitude = altitudes.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
         
         // Detect flight phases based on altitude
@@ -324,6 +354,89 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
         max_speed = speeds.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
     }
 
+    // Calculate max climb and descent rates
+    let (max_climb_rate, max_descent_rate) = if let Some(vs_i) = vspeed_idx {
+        let (_, vspeeds) = data.get_parameter_data(vs_i, 0, None, 1);
+        if !vspeeds.is_empty() {
+            let max_climb = vspeeds.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+            let max_descent = vspeeds.iter().cloned().fold(f64::INFINITY, f64::min);
+            (Some(max_climb), Some(max_descent.abs()))
+        } else {
+            (None, None)
+        }
+    } else {
+        (None, None)
+    };
+
+    // Approach analysis (if landing detected)
+    let approach_analysis = if phases.iter().any(|p| p.name == "Landing") && vspeed_idx.is_some() && speed_idx.is_some() {
+        let vs_i = vspeed_idx.unwrap();
+        let spd_i = speed_idx.unwrap();
+        
+        // Analyze last 2 minutes before landing
+        let landing_time = phases.iter().find(|p| p.name == "Landing").unwrap().start_time;
+        let approach_start = (landing_time - 120.0).max(0.0);
+        
+        let (_, vspeeds) = data.get_parameter_data(vs_i, 0, Some((approach_start, landing_time)), 1);
+        let (_, speeds) = data.get_parameter_data(spd_i, 0, Some((approach_start, landing_time)), 1);
+        
+        if !vspeeds.is_empty() && !speeds.is_empty() {
+            let avg_descent = vspeeds.iter().sum::<f64>() / vspeeds.len() as f64;
+            let touchdown_spd = speeds.last().copied().unwrap_or(0.0);
+            
+            // Check for stable approach (descent rate between 300-1000 fpm)
+            let stable = vspeeds.iter().filter(|&&v| v < -300.0 && v > -1000.0).count() 
+                         > vspeeds.len() * 7 / 10; // 70% of approach should be stable
+            
+            Some(ApproachAnalysis {
+                stable_approach: stable,
+                average_descent_rate: avg_descent,
+                touchdown_speed: touchdown_spd,
+                final_approach_altitude: altitudes.iter().rev().take(10).sum::<f64>() / 10.0,
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Anomaly detection
+    let mut anomalies = Vec::new();
+    
+    // Check for excessive descent rates
+    if let Some(vs_i) = vspeed_idx {
+        let (times, vspeeds) = data.get_parameter_data(vs_i, 0, None, 1);
+        for (i, &vspeed) in vspeeds.iter().enumerate() {
+            if vspeed < -2000.0 {
+                anomalies.push(Anomaly {
+                    timestamp: times[i],
+                    severity: "high".to_string(),
+                    description: "Excessive descent rate".to_string(),
+                    parameter: "Vertical Speed".to_string(),
+                    value: vspeed,
+                });
+            }
+        }
+    }
+    
+    // Check for excessive G-forces
+    if let Some(g_i) = g_force_idx {
+        let (times, g_forces) = data.get_parameter_data(g_i, 0, None, 1);
+        for (i, &g) in g_forces.iter().enumerate() {
+            if g > 2.5 || g < -1.0 {
+                let severity = if g > 3.0 || g < -1.5 { "high" } else { "medium" };
+                anomalies.push(Anomaly {
+                    timestamp: times[i],
+                    severity: severity.to_string(),
+                    description: "Excessive G-force".to_string(),
+                    parameter: "G Load".to_string(),
+                    value: g,
+                });
+            }
+        }
+    }
+
     // Calculate average fuel flow
     let average_fuel_flow = if let Some(ff_i) = fuel_flow_idx {
         let (_, fuel_flows) = data.get_parameter_data(ff_i, 0, None, 1);
@@ -351,6 +464,10 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
         max_speed,
         average_fuel_flow,
         landing_g_force: landing_g,
+        max_climb_rate,
+        max_descent_rate,
+        approach_analysis,
+        anomalies,
     })
 }
 
