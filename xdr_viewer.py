@@ -1523,15 +1523,15 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
         
         # Load saved theme and language preferences
-        saved_theme = self.settings.value('theme', 'dark')
-        saved_language = self.settings.value('language', 'system')
+        self.saved_theme = self.settings.value('theme', 'dark')
+        self.saved_language = self.settings.value('language', 'system')
         
         # Apply saved theme
-        if saved_theme in get_theme_names():
-            set_theme(saved_theme)
+        if self.saved_theme in get_theme_names():
+            set_theme(self.saved_theme)
         
         # Apply saved language
-        set_language(saved_language)
+        set_language(self.saved_language)
         
         self.setup_ui()
         self.setup_menu()
@@ -1816,8 +1816,12 @@ class MainWindow(QMainWindow):
             theme_menu.addAction(action)
             self.theme_actions.append((theme_key, action))
         
-        # Set default theme checked
-        self.theme_actions[0][1].setChecked(True)
+        # Set currently active theme as checked
+        current_theme = self.saved_theme if hasattr(self, 'saved_theme') else 'dark'
+        for theme_key, action in self.theme_actions:
+            if theme_key == current_theme:
+                action.setChecked(True)
+                break
         
         # Language menu (NEW)
         language_menu = menubar.addMenu(tr('menu_language'))
@@ -1846,11 +1850,12 @@ class MainWindow(QMainWindow):
             'zh_CN': lang_chinese_action,
         }
         
-        # Set current language checked
-        current_lang = get_current_language()
+        # Set currently saved language as checked
+        current_lang = self.saved_language if hasattr(self, 'saved_language') else 'system'
         if current_lang in self.lang_actions:
             self.lang_actions[current_lang].setChecked(True)
         else:
+            # If saved language is 'system' or unknown, check system option
             self.lang_actions['system'].setChecked(True)
         
         # Help menu
