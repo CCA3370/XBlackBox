@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
     QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
     QToolBar, QStyle, QSizePolicy, QProgressDialog, QSlider
 )
-from PySide6.QtCore import Qt, Signal, QThread, QTimer, QSettings, QUrl
+from PySide6.QtCore import Qt, Signal, QThread, QTimer, QSettings, QUrl, QSize
 from PySide6.QtGui import QAction, QFont, QColor, QIcon, QKeySequence, QDragEnterEvent, QDropEvent
 
 import matplotlib
@@ -512,12 +512,10 @@ class PlotCanvas(FigureCanvas):
     
     def __init__(self, parent=None):
         self.fig = Figure(figsize=(10, 6), dpi=100)
-        self.fig.set_facecolor('#1e1e1e')
+        theme = get_current_theme()
+        self.fig.set_facecolor(theme.colors['background'])
         super().__init__(self.fig)
         self.setParent(parent)
-        
-        # Modern dark theme for plots
-        plt.style.use('dark_background')
         
         self.axes = []
         self.plots = []
@@ -554,12 +552,14 @@ class PlotCanvas(FigureCanvas):
         total_frames = len(data.frames)
         downsample_factor = max(1, total_frames // self.MAX_PLOT_POINTS)
         
+        theme = get_current_theme()
+        
         if separate_axes:
             # Each parameter on its own axis
             n = len(parameters)
             for i, param in enumerate(parameters):
                 ax = self.fig.add_subplot(n, 1, i + 1)
-                ax.set_facecolor('#252525')
+                ax.set_facecolor(theme.colors['surface'])
                 self.axes.append(ax)
                 
                 if plot_derivative:
@@ -579,22 +579,22 @@ class PlotCanvas(FigureCanvas):
                 line, = ax.plot(timestamps, values, color=color, linewidth=1.5, antialiased=True)
                 self.plots.append(line)
                 
-                ax.set_ylabel(ylabel, fontsize=9, color='#e0e0e0', fontweight='500')
-                ax.tick_params(colors='#b0b0b0', labelsize=8)
-                ax.spines['bottom'].set_color('#3d3d3d')
-                ax.spines['top'].set_color('#3d3d3d')
-                ax.spines['left'].set_color('#3d3d3d')
-                ax.spines['right'].set_color('#3d3d3d')
+                ax.set_ylabel(ylabel, fontsize=9, color=theme.colors['text_primary'], fontweight='500')
+                ax.tick_params(colors=theme.colors['text_secondary'], labelsize=8)
+                ax.spines['bottom'].set_color(theme.colors['border'])
+                ax.spines['top'].set_color(theme.colors['border'])
+                ax.spines['left'].set_color(theme.colors['border'])
+                ax.spines['right'].set_color(theme.colors['border'])
                 if show_grid:
-                    ax.grid(True, alpha=0.2, linestyle='--', linewidth=0.5, color='#4d4d4d')
+                    ax.grid(True, alpha=0.2, linestyle='--', linewidth=0.5, color=theme.colors['border_hover'])
                 
                 if i == len(parameters) - 1:
-                    ax.set_xlabel('Time (seconds)', color='#e0e0e0', fontsize=9, fontweight='500')
+                    ax.set_xlabel('Time (seconds)', color=theme.colors['text_primary'], fontsize=9, fontweight='500')
                     
         else:
             # All parameters on same axis
             ax = self.fig.add_subplot(111)
-            ax.set_facecolor('#252525')
+            ax.set_facecolor(theme.colors['surface'])
             self.axes.append(ax)
             
             for i, param in enumerate(parameters):
@@ -616,18 +616,18 @@ class PlotCanvas(FigureCanvas):
                                label=label, antialiased=True)
                 self.plots.append(line)
                 
-            ax.set_xlabel('Time (seconds)', color='#e0e0e0', fontsize=9, fontweight='500')
+            ax.set_xlabel('Time (seconds)', color=theme.colors['text_primary'], fontsize=9, fontweight='500')
             ylabel = 'Rate of Change' if plot_derivative else 'Value'
-            ax.set_ylabel(ylabel, color='#e0e0e0', fontsize=9, fontweight='500')
-            ax.tick_params(colors='#b0b0b0', labelsize=8)
-            ax.spines['bottom'].set_color('#3d3d3d')
-            ax.spines['top'].set_color('#3d3d3d')
-            ax.spines['left'].set_color('#3d3d3d')
-            ax.spines['right'].set_color('#3d3d3d')
+            ax.set_ylabel(ylabel, color=theme.colors['text_primary'], fontsize=9, fontweight='500')
+            ax.tick_params(colors=theme.colors['text_secondary'], labelsize=8)
+            ax.spines['bottom'].set_color(theme.colors['border'])
+            ax.spines['top'].set_color(theme.colors['border'])
+            ax.spines['left'].set_color(theme.colors['border'])
+            ax.spines['right'].set_color(theme.colors['border'])
             if show_grid:
-                ax.grid(True, alpha=0.2, linestyle='--', linewidth=0.5, color='#4d4d4d')
-            ax.legend(loc='upper right', fontsize=8, facecolor='#2d2d2d', 
-                     edgecolor='#0d7377', labelcolor='#e0e0e0', framealpha=0.95)
+                ax.grid(True, alpha=0.2, linestyle='--', linewidth=0.5, color=theme.colors['border_hover'])
+            ax.legend(loc='upper right', fontsize=8, facecolor=theme.colors['surface_alt'], 
+                     edgecolor=theme.colors['primary'], labelcolor=theme.colors['text_primary'], framealpha=0.95)
             
         self.fig.tight_layout()
         self.draw()
@@ -665,7 +665,7 @@ class ParameterSelector(QWidget):
         
         # Search/filter
         search_layout = QHBoxLayout()
-        search_layout.addWidget(QLabel("Filter:"))
+        search_layout.addWidget(QLabel(tr('param_filter')))
         self.filter_edit = QComboBox()
         self.filter_edit.setEditable(True)
         self.filter_edit.setInsertPolicy(QComboBox.NoInsert)
@@ -675,11 +675,11 @@ class ParameterSelector(QWidget):
         
         # Select all / none buttons
         btn_layout = QHBoxLayout()
-        self.btn_select_all = QPushButton("✓ Select All")
-        self.btn_select_all.setToolTip("Select all visible parameters")
+        self.btn_select_all = QPushButton(tr('param_select_all'))
+        self.btn_select_all.setToolTip(tr('param_select_all_tooltip'))
         self.btn_select_all.clicked.connect(self.select_all)
-        self.btn_select_none = QPushButton("✗ Clear All")
-        self.btn_select_none.setToolTip("Deselect all parameters")
+        self.btn_select_none = QPushButton(tr('param_clear_all'))
+        self.btn_select_none.setToolTip(tr('param_clear_all_tooltip'))
         self.btn_select_none.setObjectName("secondaryButton")
         self.btn_select_none.clicked.connect(self.select_none)
         btn_layout.addWidget(self.btn_select_all)
@@ -825,15 +825,19 @@ class FileInfoWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
         
-        self.info_label = QLabel("No file loaded")
+        theme = get_current_theme()
+        
+        self.info_label = QLabel(tr('file_info_no_file'))
         self.info_label.setWordWrap(True)
-        self.info_label.setStyleSheet("QLabel { background-color: #252525; padding: 0px; border-radius: 8px; border: 2px solid #3d3d3d; }")
+        self.info_label.setStyleSheet(f"QLabel {{ background-color: {theme.colors['surface']}; padding: 0px; border-radius: 8px; border: 2px solid {theme.colors['border']}; }}")
         layout.addWidget(self.info_label)
         
     def update_info(self, data: XDRData):
         """Update displayed information"""
+        theme = get_current_theme()
+        
         if not data.header:
-            self.info_label.setText('<div style="text-align: center; padding: 20px;"><h3 style="color: #b0b0b0;">📂 No file loaded</h3><p style="color: #808080;">Open an XDR file to begin</p></div>')
+            self.info_label.setText(f'<div style="text-align: center; padding: 20px;"><h3 style="color: {theme.colors["text_secondary"]};">📂 {tr("file_info_no_file")}</h3><p style="color: {theme.colors["text_disabled"]};">{tr("file_info_title")}</p></div>')
             return
             
         h = data.header
@@ -841,23 +845,23 @@ class FileInfoWidget(QWidget):
         # Status indicator with icon
         if data.is_recording_complete():
             status_icon = '✅'
-            status_text = 'Complete'
-            status_color = '#4ecdc4'
+            status_text = tr('file_info_status_complete')
+            status_color = theme.colors['success']
             end_time = str(h.get('end_datetime', 'Unknown'))
             duration = f"{h.get('duration', 0):.1f} seconds"
             total_frames = h.get('total_records', len(data.frames))
         else:
             status_icon = '🔴'
-            status_text = 'Recording...'
-            status_color = '#ff6b6b'
-            end_time = '<i style="color: #b0b0b0;">In progress</i>'
+            status_text = tr('file_info_status_recording')
+            status_color = theme.colors['error']
+            end_time = f'<i style="color: {theme.colors["text_secondary"]};">{tr("file_info_in_progress")}</i>'
             # Calculate approximate duration from frames
             if data.frames:
                 approx_duration = data.frames[-1]['timestamp']
-                duration = f"~{approx_duration:.1f} sec <i>(ongoing)</i>"
+                duration = f"~{approx_duration:.1f} sec <i>({tr('file_info_ongoing')})</i>"
             else:
                 duration = "N/A"
-            total_frames = f"{len(data.frames)} <i>(so far)</i>"
+            total_frames = f"{len(data.frames)} <i>({tr('file_info_so_far')})</i>"
         
         try:
             file_size = Path(data.filepath).stat().st_size
@@ -877,59 +881,57 @@ class FileInfoWidget(QWidget):
         frequency = f"{1/interval:.1f} Hz" if interval > 0 else "N/A"
         
         # Color-code recording level
-        level_colors = {1: '#4ecdc4', 2: '#ffe66d', 3: '#ff6b6b'}
-        level_color = level_colors.get(h.get('level', 1), '#808080')
+        level_colors = {1: theme.colors['success'], 2: theme.colors['warning'], 3: theme.colors['error']}
+        level_color = level_colors.get(h.get('level', 1), theme.colors['text_disabled'])
         
         info = f"""
         <div style="padding: 12px; line-height: 1.6;">
-            <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #3d3d3d;">
-                <h3 style="color: #0d7377; margin: 0 0 8px 0;">📄 {Path(data.filepath).name}</h3>
-                <div style="background: #2d2d2d; padding: 8px; border-radius: 6px; margin-top: 8px;">
+            <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid {theme.colors['border']};">
+                <h3 style="color: {theme.colors['primary']}; margin: 0 0 8px 0;">📄 {Path(data.filepath).name}</h3>
+                <div style="background: {theme.colors['surface_alt']}; padding: 8px; border-radius: 6px; margin-top: 8px;">
                     <span style="color: {status_color}; font-weight: bold; font-size: 11pt;">{status_icon} {status_text}</span>
                 </div>
             </div>
             
             <table style="width: 100%; border-spacing: 0 6px;">
                 <tr>
-                    <td style="color: #0d7377; font-weight: 500; padding: 4px 0;">📊 Level:</td>
-                    <td style="color: #e0e0e0; padding: 4px 0;">
+                    <td style="color: {theme.colors['primary']}; font-weight: 500; padding: 4px 0;">📊 {tr('file_info_level')}</td>
+                    <td style="color: {theme.colors['text_primary']}; padding: 4px 0;">
                         <span style="color: {level_color}; font-weight: bold;">{h.get('level_name', 'Unknown')}</span>
-                        <span style="color: #808080;"> (Level {h.get('level', '?')})</span>
+                        <span style="color: {theme.colors['text_disabled']};"> (Level {h.get('level', '?')})</span>
                     </td>
                 </tr>
                 <tr>
-                    <td style="color: #0d7377; font-weight: 500; padding: 4px 0;">⏱️ Interval:</td>
-                    <td style="color: #e0e0e0; padding: 4px 0;">{interval:.3f} sec <span style="color: #808080;">({frequency})</span></td>
+                    <td style="color: {theme.colors['primary']}; font-weight: 500; padding: 4px 0;">⏱️ {tr('file_info_interval')}</td>
+                    <td style="color: {theme.colors['text_primary']}; padding: 4px 0;">{interval:.3f} sec <span style="color: {theme.colors['text_disabled']};">({frequency})</span></td>
                 </tr>
                 <tr>
-                    <td style="color: #0d7377; font-weight: 500; padding: 4px 0;">🕐 Start:</td>
-                    <td style="color: #e0e0e0; padding: 4px 0;">{h.get('start_datetime', 'Unknown')}</td>
+                    <td style="color: {theme.colors['primary']}; font-weight: 500; padding: 4px 0;">🕐 {tr('file_info_start')}</td>
+                    <td style="color: {theme.colors['text_primary']}; padding: 4px 0;">{h.get('start_datetime', 'Unknown')}</td>
                 </tr>
                 <tr>
-                    <td style="color: #0d7377; font-weight: 500; padding: 4px 0;">🕑 End:</td>
-                    <td style="color: #e0e0e0; padding: 4px 0;">{end_time}</td>
+                    <td style="color: {theme.colors['primary']}; font-weight: 500; padding: 4px 0;">🕑 {tr('file_info_end')}</td>
+                    <td style="color: {theme.colors['text_primary']}; padding: 4px 0;">{end_time}</td>
                 </tr>
                 <tr>
-                    <td style="color: #0d7377; font-weight: 500; padding: 4px 0;">⏲️ Duration:</td>
-                    <td style="color: #e0e0e0; padding: 4px 0;">{duration}</td>
+                    <td style="color: {theme.colors['primary']}; font-weight: 500; padding: 4px 0;">⏲️ {tr('file_info_duration')}</td>
+                    <td style="color: {theme.colors['text_primary']}; padding: 4px 0;">{duration}</td>
                 </tr>
                 <tr>
-                    <td style="color: #0d7377; font-weight: 500; padding: 4px 0; padding-top: 12px; border-top: 1px solid #3d3d3d;">🎞️ Frames:</td>
-                    <td style="color: #e0e0e0; padding: 4px 0; padding-top: 12px; border-top: 1px solid #3d3d3d;"><b>{total_frames:,}</b></td>
+                    <td style="color: {theme.colors['primary']}; font-weight: 500; padding: 4px 0; padding-top: 12px; border-top: 1px solid {theme.colors['border']};">🎞️ {tr('file_info_frames')}</td>
+                    <td style="color: {theme.colors['text_primary']}; padding: 4px 0; padding-top: 12px; border-top: 1px solid {theme.colors['border']};"><b>{total_frames}</b></td>
                 </tr>
                 <tr>
-                    <td style="color: #0d7377; font-weight: 500; padding: 4px 0;">📈 Parameters:</td>
-                    <td style="color: #e0e0e0; padding: 4px 0;"><b>{h.get('dataref_count', 0)}</b></td>
+                    <td style="color: {theme.colors['primary']}; font-weight: 500; padding: 4px 0;">📈 {tr('file_info_parameters')}</td>
+                    <td style="color: {theme.colors['text_primary']}; padding: 4px 0;"><b>{h.get('dataref_count', 0)}</b></td>
                 </tr>
                 <tr>
-                    <td style="color: #0d7377; font-weight: 500; padding: 4px 0;">💾 Size:</td>
-                    <td style="color: #e0e0e0; padding: 4px 0;">{file_size_str}</td>
+                    <td style="color: {theme.colors['primary']}; font-weight: 500; padding: 4px 0;">💾 {tr('file_info_size')}</td>
+                    <td style="color: {theme.colors['text_primary']}; padding: 4px 0;">{file_size_str}</td>
                 </tr>
             </table>
         </div>
         """
-        
-        self.info_label.setText(info)
 
 
 class DataTableWidget(QWidget):
@@ -946,17 +948,17 @@ class DataTableWidget(QWidget):
         
         # Controls
         controls = QHBoxLayout()
-        controls.addWidget(QLabel("Show frames:"))
+        controls.addWidget(QLabel(tr('data_show_frames')))
         self.spin_start = QSpinBox()
         self.spin_start.setMinimum(0)
         self.spin_start.setValue(0)
         controls.addWidget(self.spin_start)
-        controls.addWidget(QLabel("to"))
+        controls.addWidget(QLabel(tr('data_to')))
         self.spin_end = QSpinBox()
         self.spin_end.setMinimum(0)
         self.spin_end.setValue(100)
         controls.addWidget(self.spin_end)
-        self.btn_refresh = QPushButton("Refresh")
+        self.btn_refresh = QPushButton(tr('data_refresh'))
         self.btn_refresh.clicked.connect(self.refresh_table)
         controls.addWidget(self.btn_refresh)
         controls.addStretch()
@@ -1029,9 +1031,11 @@ class StatisticsWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
         
+        theme = get_current_theme()
+        
         # Title
         title = QLabel("<b>📊 Statistical Analysis</b>")
-        title.setStyleSheet("font-size: 13pt; color: #0d7377; padding: 8px;")
+        title.setStyleSheet(f"font-size: 13pt; color: {theme.colors['primary']}; padding: 8px;")
         layout.addWidget(title)
         
         # Statistics table
@@ -1102,14 +1106,16 @@ class CorrelationWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
         
+        theme = get_current_theme()
+        
         # Title
         title = QLabel("<b>🔗 Parameter Correlation Analysis</b>")
-        title.setStyleSheet("font-size: 13pt; color: #0d7377; padding: 8px;")
+        title.setStyleSheet(f"font-size: 13pt; color: {theme.colors['primary']}; padding: 8px;")
         layout.addWidget(title)
         
         info = QLabel("Correlation coefficient ranges from -1 (negative correlation) to +1 (positive correlation)")
         info.setWordWrap(True)
-        info.setStyleSheet("color: #b0b0b0; font-size: 9pt; padding: 4px 8px; background-color: #2d2d2d; border-radius: 6px;")
+        info.setStyleSheet(f"color: {theme.colors['text_secondary']}; font-size: 9pt; padding: 4px 8px; background-color: {theme.colors['surface_alt']}; border-radius: 6px;")
         layout.addWidget(info)
         
         # Correlation table
@@ -1208,14 +1214,16 @@ class FFTWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
         
+        theme = get_current_theme()
+        
         # Title
         title = QLabel("<b>📡 Frequency Analysis (FFT)</b>")
-        title.setStyleSheet("font-size: 13pt; color: #0d7377; padding: 8px;")
+        title.setStyleSheet(f"font-size: 13pt; color: {theme.colors['primary']}; padding: 8px;")
         layout.addWidget(title)
         
         info = QLabel("Fast Fourier Transform reveals periodic patterns and oscillations in the data")
         info.setWordWrap(True)
-        info.setStyleSheet("color: #b0b0b0; font-size: 9pt; padding: 4px 8px; background-color: #2d2d2d; border-radius: 6px;")
+        info.setStyleSheet(f"color: {theme.colors['text_secondary']}; font-size: 9pt; padding: 4px 8px; background-color: {theme.colors['surface_alt']}; border-radius: 6px;")
         layout.addWidget(info)
         
         # Controls
@@ -1240,7 +1248,7 @@ class FFTWidget(QWidget):
         # Info label
         self.info_label = QLabel("")
         self.info_label.setWordWrap(True)
-        self.info_label.setStyleSheet("padding: 8px; background-color: #2d2d2d; border-radius: 6px; color: #e0e0e0;")
+        self.info_label.setStyleSheet(f"padding: 8px; background-color: {theme.colors['surface_alt']}; border-radius: 6px; color: {theme.colors['text_primary']};")
         layout.addWidget(self.info_label)
         
     def set_data(self, data: XDRData, selected_params: List[Dict]):
@@ -1333,14 +1341,16 @@ class FlightPath3DWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
         
+        theme = get_current_theme()
+        
         # Title
         title = QLabel("<b>✈️ 3D Flight Path</b>")
-        title.setStyleSheet("font-size: 13pt; color: #0d7377; padding: 8px;")
+        title.setStyleSheet(f"font-size: 13pt; color: {theme.colors['primary']}; padding: 8px;")
         layout.addWidget(title)
         
         info = QLabel("Interactive 3D visualization of aircraft trajectory using latitude, longitude, and altitude")
         info.setWordWrap(True)
-        info.setStyleSheet("color: #b0b0b0; font-size: 9pt; padding: 4px 8px; background-color: #2d2d2d; border-radius: 6px;")
+        info.setStyleSheet(f"color: {theme.colors['text_secondary']}; font-size: 9pt; padding: 4px 8px; background-color: {theme.colors['surface_alt']}; border-radius: 6px;")
         layout.addWidget(info)
         
         # Controls
@@ -1369,7 +1379,7 @@ class FlightPath3DWidget(QWidget):
         
         # 3D plot
         self.fig = Figure(figsize=(10, 8), dpi=100)
-        self.fig.set_facecolor('#1e1e1e')
+        self.fig.set_facecolor(theme.colors['background'])
         self.canvas = FigureCanvas(self.fig)
         self.canvas.setParent(self)
         
@@ -1450,9 +1460,10 @@ class FlightPath3DWidget(QWidget):
         
         # Create 3D plot
         self.fig.clear()
+        theme = get_current_theme()
         ax = self.fig.add_subplot(111, projection='3d')
-        ax.set_facecolor('#252525')
-        self.fig.patch.set_facecolor('#1e1e1e')
+        ax.set_facecolor(theme.colors['surface'])
+        self.fig.patch.set_facecolor(theme.colors['background'])
         
         # Plot path
         if self.cb_color_by_altitude.isChecked():
@@ -1465,36 +1476,36 @@ class FlightPath3DWidget(QWidget):
                 ax.plot([lons[i], lons[i+1]], [lats[i], lats[i+1]], [alts[i], alts[i+1]],
                        color=colors[i], linewidth=2, alpha=0.8)
         else:
-            ax.plot(lons, lats, alts, color='#0d7377', linewidth=2, alpha=0.8)
+            ax.plot(lons, lats, alts, color=theme.colors['primary'], linewidth=2, alpha=0.8)
         
         # Add markers if requested
         if self.cb_show_markers.isChecked():
             # Downsample markers for performance
             step = max(1, len(lats) // 100)
             ax.scatter(lons[::step], lats[::step], alts[::step], 
-                      c='#ff6b6b', s=20, alpha=0.6, edgecolors='none')
+                      c=theme.colors['error'], s=20, alpha=0.6, edgecolors='none')
             
             # Mark start and end
             ax.scatter([lons[0]], [lats[0]], [alts[0]], 
-                      c='#4ecdc4', s=100, marker='o', label='Start', edgecolors='white', linewidths=2)
+                      c=theme.colors['success'], s=100, marker='o', label='Start', edgecolors='white', linewidths=2)
             ax.scatter([lons[-1]], [lats[-1]], [alts[-1]], 
-                      c='#ff6b6b', s=100, marker='s', label='End', edgecolors='white', linewidths=2)
-            ax.legend(facecolor='#2d2d2d', edgecolor='#0d7377', labelcolor='#e0e0e0')
+                      c=theme.colors['error'], s=100, marker='s', label='End', edgecolors='white', linewidths=2)
+            ax.legend(facecolor=theme.colors['surface_alt'], edgecolor=theme.colors['primary'], labelcolor=theme.colors['text_primary'])
         
         # Labels and styling
-        ax.set_xlabel('Longitude', color='#e0e0e0', fontsize=9, fontweight='500')
-        ax.set_ylabel('Latitude', color='#e0e0e0', fontsize=9, fontweight='500')
-        ax.set_zlabel('Altitude (ft)', color='#e0e0e0', fontsize=9, fontweight='500')
-        ax.tick_params(colors='#b0b0b0', labelsize=8)
+        ax.set_xlabel('Longitude', color=theme.colors['text_primary'], fontsize=9, fontweight='500')
+        ax.set_ylabel('Latitude', color=theme.colors['text_primary'], fontsize=9, fontweight='500')
+        ax.set_zlabel('Altitude (ft)', color=theme.colors['text_primary'], fontsize=9, fontweight='500')
+        ax.tick_params(colors=theme.colors['text_secondary'], labelsize=8)
         
         # Set background colors
         ax.xaxis.pane.fill = False
         ax.yaxis.pane.fill = False
         ax.zaxis.pane.fill = False
-        ax.xaxis.pane.set_edgecolor('#3d3d3d')
-        ax.yaxis.pane.set_edgecolor('#3d3d3d')
-        ax.zaxis.pane.set_edgecolor('#3d3d3d')
-        ax.grid(True, alpha=0.2, linestyle='--', linewidth=0.5, color='#4d4d4d')
+        ax.xaxis.pane.set_edgecolor(theme.colors['border'])
+        ax.yaxis.pane.set_edgecolor(theme.colors['border'])
+        ax.zaxis.pane.set_edgecolor(theme.colors['border'])
+        ax.grid(True, alpha=0.2, linestyle='--', linewidth=0.5, color=theme.colors['border_hover'])
         
         self.fig.tight_layout()
         self.canvas.draw()
@@ -1577,7 +1588,7 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.file_info)
         
         # Parameter selector
-        param_group = QGroupBox("Parameters to Plot")
+        param_group = QGroupBox(tr('param_group_title'))
         param_layout = QVBoxLayout(param_group)
         self.param_selector = ParameterSelector()
         self.param_selector.selectionChanged.connect(self.update_plot)
@@ -1593,7 +1604,7 @@ class MainWindow(QMainWindow):
         
         # Time range selection
         time_range_layout = QHBoxLayout()
-        time_label = QLabel("⏱️ Time Range:")
+        time_label = QLabel(tr('time_range_label'))
         time_label.setStyleSheet("font-weight: 500; color: #0d7377;")
         time_range_layout.addWidget(time_label)
         
@@ -1617,8 +1628,8 @@ class MainWindow(QMainWindow):
         self.spin_time_end.valueChanged.connect(self.on_time_range_changed)
         time_range_layout.addWidget(self.spin_time_end)
         
-        self.btn_reset_time_range = QPushButton("🔄 Reset")
-        self.btn_reset_time_range.setToolTip("Reset to full time range")
+        self.btn_reset_time_range = QPushButton(tr('time_range_reset'))
+        self.btn_reset_time_range.setToolTip(tr('time_range_reset_tooltip'))
         self.btn_reset_time_range.setObjectName("secondaryButton")
         self.btn_reset_time_range.clicked.connect(self.reset_time_range)
         time_range_layout.addWidget(self.btn_reset_time_range)
@@ -1629,31 +1640,31 @@ class MainWindow(QMainWindow):
         # Plot options
         options_layout = QHBoxLayout()
         
-        options_label = QLabel("📊 Plot Options:")
+        options_label = QLabel(tr('plot_options_label'))
         options_label.setStyleSheet("font-weight: 500; color: #0d7377;")
         options_layout.addWidget(options_label)
         
-        self.cb_separate_axes = QCheckBox("Separate Axes")
-        self.cb_separate_axes.setToolTip("Plot each parameter on its own Y-axis")
+        self.cb_separate_axes = QCheckBox(tr('option_separate_axes'))
+        self.cb_separate_axes.setToolTip(tr('option_separate_axes_tooltip'))
         self.cb_separate_axes.stateChanged.connect(self.update_plot)
         options_layout.addWidget(self.cb_separate_axes)
         
-        self.cb_grid = QCheckBox("Grid")
-        self.cb_grid.setToolTip("Show grid lines on plots")
+        self.cb_grid = QCheckBox(tr('option_grid'))
+        self.cb_grid.setToolTip(tr('option_grid_tooltip'))
         self.cb_grid.setChecked(True)
         self.cb_grid.stateChanged.connect(self.update_plot)
         options_layout.addWidget(self.cb_grid)
         
-        self.cb_derivative = QCheckBox("Derivative")
-        self.cb_derivative.setToolTip("Plot rate of change (d/dt) instead of raw values")
+        self.cb_derivative = QCheckBox(tr('option_derivative'))
+        self.cb_derivative.setToolTip(tr('option_derivative_tooltip'))
         self.cb_derivative.stateChanged.connect(self.update_plot)
         options_layout.addWidget(self.cb_derivative)
         
         options_layout.addSpacing(20)
         
         # Live mode checkbox
-        self.cb_live_mode = QCheckBox("🔴 Live Mode")
-        self.cb_live_mode.setToolTip("Monitor recording in real-time")
+        self.cb_live_mode = QCheckBox(tr('option_live_mode'))
+        self.cb_live_mode.setToolTip(tr('option_live_mode_tooltip'))
         self.cb_live_mode.setStyleSheet("QCheckBox { color: #ff6b6b; font-weight: bold; }")
         self.cb_live_mode.stateChanged.connect(self.toggle_live_mode)
         options_layout.addWidget(self.cb_live_mode)
@@ -1669,8 +1680,8 @@ class MainWindow(QMainWindow):
         
         options_layout.addStretch()
         
-        self.btn_plot = QPushButton("🔄 Update Plot")
-        self.btn_plot.setToolTip("Refresh plot with current selection (F5)")
+        self.btn_plot = QPushButton(tr('btn_update_plot'))
+        self.btn_plot.setToolTip(tr('btn_update_plot_tooltip'))
         self.btn_plot.clicked.connect(self.update_plot)
         options_layout.addWidget(self.btn_plot)
         
@@ -1689,118 +1700,122 @@ class MainWindow(QMainWindow):
         plot_layout.addWidget(self.toolbar)
         plot_layout.addWidget(self.canvas, 1)
         
-        self.tabs.addTab(plot_widget, "Plot")
+        self.tabs.addTab(plot_widget, tr('tab_plot'))
         
         # Data table tab
         self.data_table = DataTableWidget()
-        self.tabs.addTab(self.data_table, "Data Table")
+        self.tabs.addTab(self.data_table, tr('tab_data_table'))
         
         # Statistics tab
         self.statistics_widget = StatisticsWidget()
-        self.tabs.addTab(self.statistics_widget, "Statistics")
+        self.tabs.addTab(self.statistics_widget, tr('tab_statistics'))
         
         # Correlation tab
         self.correlation_widget = CorrelationWidget()
-        self.tabs.addTab(self.correlation_widget, "Correlation")
+        self.tabs.addTab(self.correlation_widget, tr('tab_correlation'))
         
         # FFT tab
         self.fft_widget = FFTWidget()
-        self.tabs.addTab(self.fft_widget, "Frequency Analysis")
+        self.tabs.addTab(self.fft_widget, tr('tab_fft'))
         
         # 3D Flight Path tab
         self.flight_path_widget = FlightPath3DWidget()
-        self.tabs.addTab(self.flight_path_widget, "3D Flight Path")
+        self.tabs.addTab(self.flight_path_widget, tr('tab_3d_path'))
         
         right_layout.addWidget(self.tabs, 1)
         
         splitter.addWidget(right_panel)
-        splitter.setSizes([300, 900])
+        
+        # Set proper splitter sizes and constraints
+        left_panel.setMinimumWidth(320)
+        left_panel.setMaximumWidth(500)
+        splitter.setSizes([350, 850])
+        splitter.setStretchFactor(0, 0)  # Left panel doesn't stretch
+        splitter.setStretchFactor(1, 1)  # Right panel stretches
         
         main_layout.addWidget(splitter)
         
         # Status bar
-        self.statusBar().showMessage("Ready - Open an XDR file or drag & drop to begin 🚀")
+        self.statusBar().showMessage(tr('status_ready'))
         self.statusBar().setStyleSheet("QStatusBar { font-size: 9pt; }")
         
     def setup_menu(self):
         menubar = self.menuBar()
+        style = self.style()
         
         # File menu
-        file_menu = menubar.addMenu("&File")
+        file_menu = menubar.addMenu(tr('menu_file'))
         
-        open_action = QAction("&Open XDR File...", self)
+        open_action = QAction(style.standardIcon(QStyle.SP_DialogOpenButton), tr('action_open'), self)
         open_action.setShortcut(QKeySequence.Open)
         open_action.triggered.connect(self.open_file)
         file_menu.addAction(open_action)
         
         # Recent files submenu
-        self.recent_files_menu = file_menu.addMenu("Recent Files")
+        self.recent_files_menu = file_menu.addMenu(style.standardIcon(QStyle.SP_FileDialogListView), tr('action_recent'))
         self.update_recent_files_menu()
         
         file_menu.addSeparator()
         
-        export_csv_action = QAction("Export to &CSV...", self)
+        export_csv_action = QAction(style.standardIcon(QStyle.SP_DialogSaveButton), tr('action_export_csv'), self)
         export_csv_action.setShortcut("Ctrl+E")
         export_csv_action.triggered.connect(self.export_csv)
         file_menu.addAction(export_csv_action)
         
-        export_plot_action = QAction("Save Plot &Image...", self)
+        export_plot_action = QAction(style.standardIcon(QStyle.SP_DialogSaveButton), tr('action_save_plot'), self)
         export_plot_action.setShortcut(QKeySequence.Save)
         export_plot_action.triggered.connect(self.save_plot)
         file_menu.addAction(export_plot_action)
         
         file_menu.addSeparator()
         
-        exit_action = QAction("E&xit", self)
+        exit_action = QAction(style.standardIcon(QStyle.SP_DialogCloseButton), tr('action_exit'), self)
         exit_action.setShortcut(QKeySequence.Quit)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
         
         # View menu
-        view_menu = menubar.addMenu("&View")
+        view_menu = menubar.addMenu(tr('menu_view'))
         
-        refresh_action = QAction("&Refresh Plot", self)
+        refresh_action = QAction(style.standardIcon(QStyle.SP_BrowserReload), tr('action_refresh'), self)
         refresh_action.setShortcut(QKeySequence.Refresh)
         refresh_action.triggered.connect(self.update_plot)
         view_menu.addAction(refresh_action)
         
-        clear_plot_action = QAction("&Clear Plot", self)
+        clear_plot_action = QAction(style.standardIcon(QStyle.SP_DialogDiscardButton), tr('action_clear_plot'), self)
         clear_plot_action.setShortcut("Ctrl+L")
         clear_plot_action.triggered.connect(self.canvas.clear_plots)
         view_menu.addAction(clear_plot_action)
         
         view_menu.addSeparator()
         
-        zoom_in_action = QAction("Zoom &In", self)
+        zoom_in_action = QAction(style.standardIcon(QStyle.SP_TitleBarMaxButton), tr('action_zoom_in'), self)
         zoom_in_action.setShortcut(QKeySequence.ZoomIn)
         zoom_in_action.triggered.connect(self.zoom_in_plot)
         view_menu.addAction(zoom_in_action)
         
-        zoom_out_action = QAction("Zoom &Out", self)
+        zoom_out_action = QAction(style.standardIcon(QStyle.SP_TitleBarMinButton), tr('action_zoom_out'), self)
         zoom_out_action.setShortcut(QKeySequence.ZoomOut)
         zoom_out_action.triggered.connect(self.zoom_out_plot)
         view_menu.addAction(zoom_out_action)
         
         # Analysis menu
-        analysis_menu = menubar.addMenu("&Analysis")
+        analysis_menu = menubar.addMenu(tr('menu_analysis'))
         
-        stats_action = QAction("Show &Statistics", self)
+        stats_action = QAction(style.standardIcon(QStyle.SP_FileDialogInfoView), tr('action_statistics'), self)
         stats_action.setShortcut("Ctrl+T")
-        stats_action.setToolTip("View statistical analysis of selected parameters")
         stats_action.triggered.connect(self.show_statistics_tab)
         analysis_menu.addAction(stats_action)
         
-        fft_action = QAction("Show &Frequency Analysis", self)
+        fft_action = QAction(style.standardIcon(QStyle.SP_FileDialogDetailedView), tr('action_fft'), self)
         fft_action.setShortcut("Ctrl+F")
-        fft_action.setToolTip("View FFT analysis of selected parameter")
         fft_action.triggered.connect(self.show_fft_tab)
         analysis_menu.addAction(fft_action)
         
         analysis_menu.addSeparator()
         
-        flight_path_action = QAction("Show &3D Flight Path", self)
+        flight_path_action = QAction(style.standardIcon(QStyle.SP_DriveNetIcon), tr('action_3d_path'), self)
         flight_path_action.setShortcut("Ctrl+3")
-        flight_path_action.setToolTip("View 3D visualization of flight trajectory")
         flight_path_action.triggered.connect(self.show_flight_path_tab)
         analysis_menu.addAction(flight_path_action)
         
@@ -1879,36 +1894,72 @@ class MainWindow(QMainWindow):
         # Help menu
         help_menu = menubar.addMenu(tr('menu_help'))
         
-        shortcuts_action = QAction(tr('action_shortcuts'), self)
+        shortcuts_action = QAction(style.standardIcon(QStyle.SP_DialogHelpButton), tr('action_shortcuts'), self)
         shortcuts_action.setShortcut(QKeySequence.HelpContents)
         shortcuts_action.triggered.connect(self.show_shortcuts)
         help_menu.addAction(shortcuts_action)
         
         help_menu.addSeparator()
         
-        about_action = QAction(tr('action_about'), self)
+        about_action = QAction(style.standardIcon(QStyle.SP_MessageBoxInformation), tr('action_about'), self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
         
     def setup_toolbar(self):
         toolbar = QToolBar()
         toolbar.setMovable(False)
+        size = self.style().pixelMetric(QStyle.PM_ToolBarIconSize)
+        toolbar.setIconSize(QSize(int(size * 1.2), int(size * 1.2)))
         self.addToolBar(toolbar)
         
-        open_action = QAction(self.style().standardIcon(QStyle.SP_DialogOpenButton), "Open", self)
+        style = self.style()
+        
+        open_action = QAction(style.standardIcon(QStyle.SP_DialogOpenButton), tr('toolbar_open'), self)
         open_action.triggered.connect(self.open_file)
         toolbar.addAction(open_action)
         
-        toolbar.addSeparator()
-        
-        export_action = QAction(self.style().standardIcon(QStyle.SP_DialogSaveButton), "Export CSV", self)
+        export_action = QAction(style.standardIcon(QStyle.SP_DialogSaveButton), tr('toolbar_export'), self)
         export_action.triggered.connect(self.export_csv)
         toolbar.addAction(export_action)
+        
+        toolbar.addSeparator()
+        
+        refresh_action = QAction(style.standardIcon(QStyle.SP_BrowserReload), tr('action_refresh'), self)
+        refresh_action.triggered.connect(self.update_plot)
+        toolbar.addAction(refresh_action)
+        
+        clear_action = QAction(style.standardIcon(QStyle.SP_DialogDiscardButton), tr('action_clear_plot'), self)
+        clear_action.triggered.connect(self.canvas.clear_plots)
+        toolbar.addAction(clear_action)
+        
+        toolbar.addSeparator()
+        
+        zoom_in_action = QAction(style.standardIcon(QStyle.SP_TitleBarMaxButton), tr('action_zoom_in'), self)
+        zoom_in_action.triggered.connect(self.zoom_in_plot)
+        toolbar.addAction(zoom_in_action)
+        
+        zoom_out_action = QAction(style.standardIcon(QStyle.SP_TitleBarMinButton), tr('action_zoom_out'), self)
+        zoom_out_action.triggered.connect(self.zoom_out_plot)
+        toolbar.addAction(zoom_out_action)
+        
+        toolbar.addSeparator()
+        
+        stats_action = QAction(style.standardIcon(QStyle.SP_FileDialogInfoView), tr('action_statistics'), self)
+        stats_action.triggered.connect(self.show_statistics_tab)
+        toolbar.addAction(stats_action)
+        
+        fft_action = QAction(style.standardIcon(QStyle.SP_FileDialogDetailedView), tr('action_fft'), self)
+        fft_action.triggered.connect(self.show_fft_tab)
+        toolbar.addAction(fft_action)
+        
+        flight_path_action = QAction(style.standardIcon(QStyle.SP_DriveNetIcon), tr('action_3d_path'), self)
+        flight_path_action.triggered.connect(self.show_flight_path_tab)
+        toolbar.addAction(flight_path_action)
         
     def open_file(self):
         """Open XDR file"""
         filepath, _ = QFileDialog.getOpenFileName(
-            self, "Open XDR File", "", "XDR Files (*.xdr);;All Files (*)"
+            self, tr('dialog_open_title'), "", tr('dialog_file_filter_xdr')
         )
         
         if not filepath:
@@ -1951,9 +2002,9 @@ class MainWindow(QMainWindow):
             progress.setValue(100)
             progress.close()
             
-            self.statusBar().showMessage(f"Loaded: {filepath} ({len(self.data.frames)} frames)")
+            self.statusBar().showMessage(f"{tr('status_loaded')} {filepath} ({len(self.data.frames)} {tr('status_frames')})")
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to open file:\n{str(e)}")
+            QMessageBox.critical(self, tr('dialog_error'), f"{tr('error_load_file')}\n{str(e)}")
     
     def add_recent_file(self, filepath: str):
         """Add file to recent files list"""
@@ -1983,7 +2034,7 @@ class MainWindow(QMainWindow):
             recent = []
         
         if not recent:
-            action = QAction("No recent files", self)
+            action = QAction(tr('no_recent_files'), self)
             action.setEnabled(False)
             self.recent_files_menu.addAction(action)
             return
@@ -2092,8 +2143,8 @@ class MainWindow(QMainWindow):
             plot_derivative=self.cb_derivative.isChecked()
         )
         
-        mode = "derivative" if self.cb_derivative.isChecked() else "value"
-        self.statusBar().showMessage(f"Plotting {len(selected)} parameter(s) ({mode} mode)")
+        mode = tr('status_mode_derivative') if self.cb_derivative.isChecked() else tr('status_mode_value')
+        self.statusBar().showMessage(f"{tr('status_plotting')} {len(selected)} {tr('status_parameters')} ({mode} {tr('status_mode')})")
         
     def show_shortcuts(self):
         """Show keyboard shortcuts help"""
@@ -2129,20 +2180,20 @@ class MainWindow(QMainWindow):
         
         if self.live_mode:
             if not self.data.filepath:
-                QMessageBox.warning(self, "Warning", "Please open an XDR file first.")
+                QMessageBox.warning(self, tr('dialog_warning'), tr('warning_no_file'))
                 self.cb_live_mode.setChecked(False)
                 return
             self.live_timer.start()
-            self.statusBar().showMessage(f"Live mode enabled - refreshing every {self.spin_live_interval.value()}ms")
+            self.statusBar().showMessage(f"{tr('status_live_enabled')} {self.spin_live_interval.value()}ms")
         else:
             self.live_timer.stop()
-            self.statusBar().showMessage("Live mode disabled")
+            self.statusBar().showMessage(tr('status_live_disabled'))
             
     def update_live_interval(self, value):
         """Update live mode refresh interval"""
         self.live_timer.setInterval(value)
         if self.live_mode:
-            self.statusBar().showMessage(f"Live mode - refreshing every {value}ms")
+            self.statusBar().showMessage(f"{tr('status_live_enabled')} {value}ms")
             
     def on_live_timer(self):
         """Called periodically in live mode to check for new data"""
@@ -2165,7 +2216,7 @@ class MainWindow(QMainWindow):
             self.update_plot()
             
             self.statusBar().showMessage(
-                f"Live: {len(self.data.frames)} frames (+{new_frames})"
+                f"{tr('status_live')} {len(self.data.frames)} {tr('status_frames')} (+{new_frames})"
             )
             
         # Check if recording is complete
@@ -2173,58 +2224,60 @@ class MainWindow(QMainWindow):
             self.cb_live_mode.setChecked(False)
             self.file_info.update_info(self.data)
             self.statusBar().showMessage(
-                f"Recording complete - {len(self.data.frames)} frames total"
+                f"{tr('status_recording_complete')} {len(self.data.frames)} {tr('status_frames_total')}"
             )
         
     def export_csv(self):
         """Export data to CSV"""
         if not self.data.frames:
-            QMessageBox.warning(self, "Warning", "No data to export. Please open an XDR file first.")
+            QMessageBox.warning(self, tr('dialog_warning'), tr('warning_no_data_export'))
             return
             
         filepath, _ = QFileDialog.getSaveFileName(
-            self, "Export to CSV", "", "CSV Files (*.csv);;All Files (*)"
+            self, tr('dialog_export_title'), "", tr('dialog_file_filter_csv')
         )
         
         if filepath:
             try:
                 self.data.export_to_csv(filepath)
-                self.statusBar().showMessage(f"Exported to: {filepath}")
-                QMessageBox.information(self, "Success", f"Data exported to:\n{filepath}")
+                self.statusBar().showMessage(f"{tr('status_exported')} {filepath}")
+                QMessageBox.information(self, tr('dialog_success'), f"{tr('success_exported')}\n{filepath}")
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to export:\n{str(e)}")
+                QMessageBox.critical(self, tr('dialog_error'), f"{tr('error_export_csv')}\n{str(e)}")
                 
     def save_plot(self):
         """Save plot as image"""
         if not self.param_selector.get_selected_parameters():
-            QMessageBox.warning(self, "Warning", "No plot to save. Please select parameters first.")
+            QMessageBox.warning(self, tr('dialog_warning'), tr('warning_no_plot'))
             return
             
         filepath, _ = QFileDialog.getSaveFileName(
-            self, "Save Plot", "", "PNG Image (*.png);;PDF Document (*.pdf);;SVG Image (*.svg)"
+            self, tr('dialog_save_plot_title'), "", tr('dialog_file_filter_image')
         )
         
         if filepath:
             try:
+                theme = get_current_theme()
                 self.canvas.fig.savefig(filepath, dpi=150, bbox_inches='tight',
-                                        facecolor='#2b2b2b', edgecolor='none')
-                self.statusBar().showMessage(f"Plot saved to: {filepath}")
+                                        facecolor=theme.colors['background'], edgecolor='none')
+                self.statusBar().showMessage(f"{tr('status_plot_saved')} {filepath}")
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to save plot:\n{str(e)}")
+                QMessageBox.critical(self, tr('dialog_error'), f"{tr('error_save_plot')}\n{str(e)}")
                 
     def show_about(self):
         """Show about dialog"""
+        theme = get_current_theme()
         QMessageBox.about(
             self,
             "About XBlackBox XDR Viewer",
-            """<div style="text-align: center;">
-            <h2 style="color: #0d7377;">XBlackBox XDR Viewer</h2>
+            f"""<div style="text-align: center;">
+            <h2 style="color: {theme.colors['primary']};">XBlackBox XDR Viewer</h2>
             <p style="font-size: 11pt;"><b>Modern Edition v2.5</b></p>
             </div>
             
             <p>A powerful tool for visualizing X-Plane flight data recordings from the XBlackBox plugin.</p>
             
-            <h3 style="color: #0d7377;">✨ Key Features</h3>
+            <h3 style="color: {theme.colors['primary']};">✨ Key Features</h3>
             <ul style="line-height: 1.6;">
                 <li><b>Modern UI</b> - Sleek dark theme with vibrant colors</li>
                 <li><b>Interactive Plotting</b> - Plot any parameter with zoom & pan</li>
@@ -2238,14 +2291,14 @@ class MainWindow(QMainWindow):
                 <li><b>Keyboard Shortcuts</b> - Efficient workflow</li>
             </ul>
             
-            <h3 style="color: #0d7377;">⚡ Performance</h3>
+            <h3 style="color: {theme.colors['primary']};">⚡ Performance</h3>
             <ul style="line-height: 1.6;">
                 <li>Automatic data downsampling for large datasets</li>
                 <li>Efficient memory management</li>
                 <li>Fast plot rendering with anti-aliasing</li>
             </ul>
             
-            <p style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #3d3d3d; color: #808080;">
+            <p style="margin-top: 20px; padding-top: 16px; border-top: 1px solid {theme.colors['border']}; color: {theme.colors['text_secondary']};">
             Built with Python, PySide6, and Matplotlib<br>
             © 2024 XBlackBox Project
             </p>
