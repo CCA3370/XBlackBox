@@ -199,6 +199,9 @@ struct FlightAnalysis {
     landing_g_force: Option<f64>,
 }
 
+// Constants for flight phase detection
+const ALTITUDE_THRESHOLD_AGL: f64 = 10.0; // feet AGL threshold for takeoff/landing detection
+
 #[tauri::command]
 async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, String> {
     let data_guard = state.xdr_data.lock().unwrap();
@@ -246,7 +249,8 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
         
         // Detect flight phases based on altitude
         let mut in_flight = false;
-        let mut phase_start = 0.0;
+        let mut phase_start_time = 0.0;
+        let total_frames = data.frames.len();
         
         for (i, frame) in data.frames.iter().enumerate() {
             let alt = if alt_i < frame.values.len() {
@@ -259,28 +263,45 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
                 0.0
             };
 
-            if !in_flight && alt > 10.0 {
+            if !in_flight && alt > ALTITUDE_THRESHOLD_AGL {
                 // Takeoff detected
                 in_flight = true;
-                phase_start = frame.timestamp;
+                phase_start_time = frame.timestamp;
                 phases.push(FlightPhase {
                     name: "Takeoff".to_string(),
                     start_time: frame.timestamp,
                     end_time: frame.timestamp,
                     duration: 0.0,
                 });
-            } else if in_flight && alt < 10.0 && i > data.frames.len() / 2 {
-                // Landing detected
+            } else if in_flight && alt < ALTITUDE_THRESHOLD_AGL && i > total_frames / 2 {
+                // Landing detected - only in second half of flight to avoid false positives during takeoff
                 if let Some(last_phase) = phases.last_mut() {
                     last_phase.end_time = frame.timestamp;
                     last_phase.duration = frame.timestamp - last_phase.start_time;
                 }
+                
+                let landing_start = frame.timestamp;
                 phases.push(FlightPhase {
                     name: "Landing".to_string(),
-                    start_time: frame.timestamp,
-                    end_time: frame.timestamp,
+                    start_time: landing_start,
+                    end_time: landing_start,
                     duration: 0.0,
                 });
+                
+                // Continue to find landing end and calculate duration
+                let landing_phase_idx = phases.len() - 1;
+                for j in (i + 1)..data.frames.len() {
+                    if let Some(next_frame) = data.frames.get(j) {
+                        phases[landing_phase_idx].end_time = next_frame.timestamp;
+                        phases[landing_phase_idx].duration = next_frame.timestamp - landing_start;
+                        
+                        // Stop updating once we're clearly on the ground (5+ seconds after touchdown)
+                        if next_frame.timestamp - landing_start > 5.0 {
+                            break;
+                        }
+                    }
+                }
+                
                 in_flight = false;
                 
                 // Record landing G-force if available
@@ -291,6 +312,8 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
                         }
                     }
                 }
+                
+                break; // Only detect first landing
             }
         }
     }
