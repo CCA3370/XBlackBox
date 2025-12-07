@@ -10,7 +10,9 @@
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
-#define EARTH_RADIUS_NM 3443.92  // Earth radius in nautical miles (standard value)
+// Earth mean radius in nautical miles
+// Using standard value: 6371.0 km = 3440.065 nm (1 nm = 1.852 km)
+#define EARTH_RADIUS_NM 3440.065
 
 Recorder& Recorder::Instance() {
     static Recorder instance;
