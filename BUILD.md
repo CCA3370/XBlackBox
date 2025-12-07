@@ -51,7 +51,11 @@ cd build
 
 **Windows (Visual Studio):**
 ```cmd
+# For Visual Studio 2022 (requires CMake 3.21+)
 cmake .. -G "Visual Studio 17 2022" -A x64
+
+# For Visual Studio 2019 (compatible with CMake 3.16+)
+cmake .. -G "Visual Studio 16 2019" -A x64
 ```
 
 **Windows (MinGW):**
