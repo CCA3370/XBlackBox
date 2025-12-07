@@ -456,12 +456,16 @@ TRANSLATIONS = {
     }
 }
 
+# Default language
+DEFAULT_LANGUAGE = 'system'
+DEFAULT_FALLBACK_LANGUAGE = 'en_US'
+
 
 class Translator:
     """Translation manager"""
     
     def __init__(self):
-        self.current_language = 'en_US'
+        self.current_language = DEFAULT_FALLBACK_LANGUAGE
         self._detect_system_language()
         
     def _detect_system_language(self):
@@ -472,9 +476,9 @@ class Translator:
                 if sys_locale.startswith('zh'):
                     self.current_language = 'zh_CN'
                 else:
-                    self.current_language = 'en_US'
-        except:
-            self.current_language = 'en_US'
+                    self.current_language = DEFAULT_FALLBACK_LANGUAGE
+        except (locale.Error, TypeError, ValueError):
+            self.current_language = DEFAULT_FALLBACK_LANGUAGE
     
     def set_language(self, lang_code: str):
         """Set current language"""

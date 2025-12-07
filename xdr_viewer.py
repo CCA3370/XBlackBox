@@ -47,8 +47,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 # Import theme and translation systems
-from themes import get_current_theme, set_theme, get_theme_names, THEMES
-from translations import tr, set_language, get_current_language
+from themes import get_current_theme, set_theme, get_theme_names, get_theme_by_name, DEFAULT_THEME
+from translations import tr, set_language, get_current_language, DEFAULT_LANGUAGE
 
 
 class XDRData:
@@ -1523,8 +1523,8 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
         
         # Load saved theme and language preferences
-        self.saved_theme = self.settings.value('theme', 'dark')
-        self.saved_language = self.settings.value('language', 'system')
+        self.saved_theme = self.settings.value('theme', DEFAULT_THEME)
+        self.saved_language = self.settings.value('language', DEFAULT_LANGUAGE)
         
         # Apply saved theme
         if self.saved_theme in get_theme_names():
@@ -1809,7 +1809,7 @@ class MainWindow(QMainWindow):
         
         self.theme_actions = []
         for theme_key in get_theme_names():
-            theme = THEMES[theme_key]
+            theme = get_theme_by_name(theme_key)
             action = QAction(theme.name, self)
             action.setCheckable(True)
             action.triggered.connect(partial(self.change_theme, theme_key))
@@ -1817,7 +1817,7 @@ class MainWindow(QMainWindow):
             self.theme_actions.append((theme_key, action))
         
         # Set currently active theme as checked
-        current_theme = self.saved_theme if hasattr(self, 'saved_theme') else 'dark'
+        current_theme = self.saved_theme if hasattr(self, 'saved_theme') else DEFAULT_THEME
         for theme_key, action in self.theme_actions:
             if theme_key == current_theme:
                 action.setChecked(True)
@@ -1851,7 +1851,7 @@ class MainWindow(QMainWindow):
         }
         
         # Set currently saved language as checked
-        current_lang = self.saved_language if hasattr(self, 'saved_language') else 'system'
+        current_lang = self.saved_language if hasattr(self, 'saved_language') else DEFAULT_LANGUAGE
         if current_lang in self.lang_actions:
             self.lang_actions[current_lang].setChecked(True)
         else:
@@ -1861,14 +1861,14 @@ class MainWindow(QMainWindow):
         # Help menu
         help_menu = menubar.addMenu(tr('menu_help'))
         
-        shortcuts_action = QAction("&Keyboard Shortcuts", self)
+        shortcuts_action = QAction(tr('action_shortcuts'), self)
         shortcuts_action.setShortcut(QKeySequence.HelpContents)
         shortcuts_action.triggered.connect(self.show_shortcuts)
         help_menu.addAction(shortcuts_action)
         
         help_menu.addSeparator()
         
-        about_action = QAction("&About", self)
+        about_action = QAction(tr('action_about'), self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
         
@@ -2273,8 +2273,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             tr('dialog_info'),
-            tr('restart_required') if get_current_language() == 'en_US' 
-            else 'Please restart the application for language changes to take effect.\n请重启应用程序以使语言更改生效。'
+            tr('restart_required')
         )
 
 

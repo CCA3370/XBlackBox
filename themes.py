@@ -954,8 +954,11 @@ THEMES = {
     'high_contrast': HighContrastTheme(),
 }
 
+# Default theme
+DEFAULT_THEME = 'dark'
+
 # Current theme
-_current_theme = THEMES['dark']
+_current_theme = THEMES[DEFAULT_THEME]
 
 
 def get_current_theme() -> Theme:
@@ -973,3 +976,8 @@ def set_theme(theme_name: str):
 def get_theme_names() -> list:
     """Get list of available theme names"""
     return list(THEMES.keys())
+
+
+def get_theme_by_name(theme_name: str) -> Theme:
+    """Get a specific theme by name"""
+    return THEMES.get(theme_name, THEMES[DEFAULT_THEME])
