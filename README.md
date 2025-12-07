@@ -29,6 +29,11 @@ See [VIEWER_GUIDE.md](VIEWER_GUIDE.md) for complete viewer documentation.
 ## Features
 
 - **Real-time Recording**: Continuously records flight data at configurable intervals (20Hz to 0.2Hz)
+- **Automatic Airport Detection** (NEW): Automatically detects and records departure and arrival airports
+  - Uses X-Plane's navigation database for accurate airport identification
+  - Captures ICAO code, full airport name, and coordinates
+  - Detection within 5 nautical miles of airports
+  - Displayed in the XDR Viewer for easy flight identification
 - **Three Recording Levels** (each level includes all data from previous levels):
   - **Simple (Level 1)**: Basic flight data (position, attitude, velocities) - ~26 parameters
   - **Normal (Level 2)**: Level 1 + flight controls, engines, systems - ~163 parameters  

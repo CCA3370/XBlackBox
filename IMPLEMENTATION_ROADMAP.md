@@ -55,116 +55,49 @@
 
 ---
 
-### 4. X-Plane Plugin: Airport Detection (需要C++插件修改)
+### 4. X-Plane Plugin: Airport Detection ✅
 
-这需要修改X-Plane插件的C++代码
+**Status: Completed**
 
-#### 技术方案
+成功实现了X-Plane插件的机场检测功能。
 
-使用X-Plane SDK的导航数据库API：
+#### 已实现的功能
 
-```cpp
-// 在 Recorder.cpp 中添加机场检测功能
+1. ✅ **C++ Plugin Enhancement**
+   - Added `AirportInfo` structure to `Recorder.h`
+   - Implemented `DetectNearestAirport()` using X-Plane Navigation API
+   - Implemented `CalculateDistance()` using Haversine formula
+   - Modified `Start()` to detect departure airport
+   - Modified `Stop()` to detect arrival airport
+   - Added `UpdateHeaderWithArrival()` to update header after recording
 
-// 1. 在记录开始时检测当前机场
-struct AirportInfo {
-    char icao[8];
-    char name[256];
-    float lat;
-    float lon;
-};
+2. ✅ **File Format Update (Version 2)**
+   - Updated XDR file format to version 2
+   - Added airport fields to header (ICAO, name, lat/lon)
+   - Maintains backward compatibility with version 1
 
-AirportInfo DetectNearestAirport(float lat, float lon) {
-    XPLMNavRef navRef = XPLMGetFirstNavAid();
-    float minDistance = FLT_MAX;
-    AirportInfo nearest = {0};
-    
-    while (navRef != XPLM_NAV_NOT_FOUND) {
-        XPLMNavType navType;
-        float navLat, navLon;
-        char navID[32];
-        char navName[256];
-        
-        XPLMGetNavAidInfo(navRef, &navType, &navLat, &navLon, 
-                         nullptr, nullptr, nullptr,
-                         navID, navName, nullptr);
-        
-        // Check if it's an airport
-        if (navType == xplm_Nav_Airport) {
-            float distance = CalculateDistance(lat, lon, navLat, navLon);
-            if (distance < minDistance && distance < 5.0) { // Within 5 nm
-                minDistance = distance;
-                strncpy(nearest.icao, navID, sizeof(nearest.icao));
-                strncpy(nearest.name, navName, sizeof(nearest.name));
-                nearest.lat = navLat;
-                nearest.lon = navLon;
-            }
-        }
-        
-        navRef = XPLMGetNextNavAid(navRef);
-    }
-    
-    return nearest;
-}
+3. ✅ **Rust Parser Update**
+   - Updated `xdr.rs` to parse version 2 headers
+   - Added `AirportInfo` structure
+   - Backward compatible with version 1 files
 
-// 2. 修改XDR文件格式，在头部添加机场信息
-struct XDRHeader {
-    char magic[4];      // "XFDR"
-    uint16_t version;   
-    uint8_t level;
-    float interval;
-    uint64_t start_timestamp;
-    uint16_t dataref_count;
-    // 新增字段:
-    char departure_icao[8];
-    char arrival_icao[8];
-    float departure_lat;
-    float departure_lon;
-    float arrival_lat;
-    float arrival_lon;
-};
+4. ✅ **UI Enhancement**
+   - Added airport display to web viewer
+   - Shows departure/arrival ICAO and name
+   - Tooltips display coordinates
+   - Only shown for version 2+ files
 
-// 3. 在记录开始和结束时调用检测
-bool Recorder::Start() {
-    // ... existing code ...
-    
-    // Detect departure airport
-    float lat = XPLMGetDataf(XPLMFindDataRef("sim/flightmodel/position/latitude"));
-    float lon = XPLMGetDataf(XPLMFindDataRef("sim/flightmodel/position/longitude"));
-    m_departureAirport = DetectNearestAirport(lat, lon);
-    
-    // Write updated header
-    WriteHeader();
-    
-    // ... rest of code ...
-}
+5. ✅ **Documentation**
+   - Updated `FILE_FORMAT.md` with version 2 specification
+   - Updated `README.md` with new feature
+   - Documented airport detection behavior
 
-bool Recorder::Stop() {
-    // ... existing code ...
-    
-    // Detect arrival airport
-    float lat = XPLMGetDataf(XPLMFindDataRef("sim/flightmodel/position/latitude"));
-    float lon = XPLMGetDataf(XPLMFindDataRef("sim/flightmodel/position/longitude"));
-    m_arrivalAirport = DetectNearestAirport(lat, lon);
-    
-    // Update header with arrival info
-    UpdateHeaderWithArrival();
-    
-    // ... rest of code ...
-}
-```
+#### 技术实现细节
 
-#### 实现步骤
-1. 修改 `include/Recorder.h` 添加机场信息结构
-2. 修改 `src/Recorder.cpp` 实现机场检测逻辑
-3. 更新XDR文件格式版本号
-4. 修改Rust解析器以读取新字段
-5. 在Tauri界面显示机场信息
-
-#### 预计工作量
-- 1-2天开发时间
-- 需要测试各种机场场景
-- 需要更新文件格式文档
+- **Detection Range**: Within 5 nautical miles (nm)
+- **API Used**: `XPLMFindNavAid()` and `XPLMGetNavAidInfo()`
+- **Distance Calculation**: Great circle distance using Haversine formula
+- **File Format**: Airport info stored in file header (544 bytes total)
 
 ---
 
@@ -174,17 +107,19 @@ bool Recorder::Stop() {
    - ✅ 已完成专业分析功能
    - ✅ 已完成性能优化
 
-2. **X-Plane Plugin**:
-   - 修改C++插件代码
-   - 机场检测功能
-   - XDR格式更新
-   - 测试和文档
+2. **X-Plane Plugin - Airport Detection**: ✅ 已完成
+   - ✅ 修改C++插件代码
+   - ✅ 机场检测功能
+   - ✅ XDR格式更新到版本2
+   - ✅ Rust解析器更新
+   - ✅ UI显示更新
+   - ✅ 测试和文档
 
-3. **3D Earth Rendering**:
+3. **3D Earth Rendering** (下一步):
    - 集成Cesium.js
    - 实现离线地图
    - 3D轨迹渲染
-   - 机场标注
+   - 机场标注（可利用已实现的机场检测数据）
 
 
 
