@@ -65,3 +65,11 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# Node.js / Tauri
+node_modules/
+web_viewer/node_modules/
+
+# Tauri build artifacts
+web_viewer/src-tauri/target/
+web_viewer/src-tauri/Cargo.lock
