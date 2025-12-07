@@ -57,7 +57,6 @@ private:
     // Windows
     void DrawStatusWindow();
     void ToggleStatusWindow();
-    void DrawSettingsWindow();
     void ToggleSettingsWindow();
     void CreateSettingsWindow();
     

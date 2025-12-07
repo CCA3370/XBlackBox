@@ -574,10 +574,6 @@ void UIManager::ToggleSettingsWindow() {
     }
 }
 
-void UIManager::DrawSettingsWindow() {
-    // This is called from the native window draw callback
-}
-
 // Settings window draw callback
 static void SettingsWindowDraw(XPLMWindowID inWindowID, void* inRefcon) {
     (void)inRefcon;
@@ -635,23 +631,35 @@ static void SettingsWindowDraw(XPLMWindowID inWindowID, void* inRefcon) {
         // Auto Start Condition
         AutoCondition startCond = Settings::Instance().GetAutoStartCondition();
         const char* startCondName = "Ground Speed";
-        if (startCond == AutoCondition::EngineRunning) startCondName = "Engine Running";
-        else if (startCond == AutoCondition::WeightOnWheels) startCondName = "Weight on Wheels";
+        const char* startOp = ">";
+        if (startCond == AutoCondition::EngineRunning) {
+            startCondName = "Engine Running";
+            startOp = "=";
+        } else if (startCond == AutoCondition::WeightOnWheels) {
+            startCondName = "Weight on Wheels";
+            startOp = "=";
+        }
         
         float startThreshold = Settings::Instance().GetAutoStartThreshold();
-        snprintf(buffer, sizeof(buffer), "  Start: %s > %.1f", startCondName, startThreshold);
+        snprintf(buffer, sizeof(buffer), "  Start: %s %s %.1f", startCondName, startOp, startThreshold);
         XPLMDrawString(white, x + 10, y, buffer, nullptr, xplmFont_Proportional);
         y -= lineHeight;
         
         // Auto Stop Condition
         AutoCondition stopCond = Settings::Instance().GetAutoStopCondition();
         const char* stopCondName = "Ground Speed";
-        if (stopCond == AutoCondition::EngineRunning) stopCondName = "Engine Running";
-        else if (stopCond == AutoCondition::WeightOnWheels) stopCondName = "Weight on Wheels";
+        const char* stopOp = "<";
+        if (stopCond == AutoCondition::EngineRunning) {
+            stopCondName = "Engine Running";
+            stopOp = "=";
+        } else if (stopCond == AutoCondition::WeightOnWheels) {
+            stopCondName = "Weight on Wheels";
+            stopOp = "=";
+        }
         
         float stopThreshold = Settings::Instance().GetAutoStopThreshold();
         float stopDelay = Settings::Instance().GetAutoStopDelay();
-        snprintf(buffer, sizeof(buffer), "  Stop: %s < %.1f (delay: %.0fs)", stopCondName, stopThreshold, stopDelay);
+        snprintf(buffer, sizeof(buffer), "  Stop: %s %s %.1f (delay: %.0fs)", stopCondName, stopOp, stopThreshold, stopDelay);
         XPLMDrawString(white, x + 10, y, buffer, nullptr, xplmFont_Proportional);
         y -= lineHeight;
     }
