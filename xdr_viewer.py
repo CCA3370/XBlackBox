@@ -1,0 +1,964 @@
+#!/usr/bin/env python3
+"""
+XBlackBox XDR Viewer - PySide6 GUI Application
+Visualize and analyze X-Plane flight data recordings
+"""
+
+import sys
+import struct
+import csv
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, List, Dict, Any
+
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QSplitter, QTreeWidget, QTreeWidgetItem, QLabel, QPushButton,
+    QFileDialog, QMessageBox, QStatusBar, QGroupBox, QCheckBox,
+    QScrollArea, QFrame, QComboBox, QSpinBox, QDoubleSpinBox,
+    QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
+    QToolBar, QStyle, QSizePolicy
+)
+from PySide6.QtCore import Qt, Signal, QThread
+from PySide6.QtGui import QAction, QFont, QColor, QIcon
+
+import matplotlib
+matplotlib.use('QtAgg')
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
+
+
+class XDRData:
+    """Container for XDR file data"""
+    
+    def __init__(self):
+        self.filepath = ""
+        self.header = {}
+        self.datarefs = []
+        self.frames = []
+        
+    def clear(self):
+        self.filepath = ""
+        self.header = {}
+        self.datarefs = []
+        self.frames = []
+        
+    def read(self, filepath: str):
+        """Read the entire XDR file"""
+        self.clear()
+        self.filepath = filepath
+        
+        with open(filepath, 'rb') as f:
+            self._read_header(f)
+            self._read_dataref_definitions(f)
+            self._read_frames(f)
+            self._read_footer(f)
+            
+    def _read_header(self, f):
+        """Read file header"""
+        magic = f.read(4)
+        if magic != b'XFDR':
+            raise ValueError(f"Invalid file format. Expected XFDR, got {magic}")
+            
+        version = struct.unpack('<H', f.read(2))[0]
+        level = struct.unpack('<B', f.read(1))[0]
+        interval = struct.unpack('<f', f.read(4))[0]
+        start_timestamp = struct.unpack('<Q', f.read(8))[0]
+        dataref_count = struct.unpack('<H', f.read(2))[0]
+        
+        self.header = {
+            'magic': magic.decode('ascii'),
+            'version': version,
+            'level': level,
+            'level_name': {1: 'Simple', 2: 'Normal', 3: 'Detailed'}.get(level, 'Unknown'),
+            'interval': interval,
+            'start_timestamp': start_timestamp,
+            'start_datetime': datetime.fromtimestamp(start_timestamp),
+            'dataref_count': dataref_count
+        }
+        
+    def _read_dataref_definitions(self, f):
+        """Read dataref definitions"""
+        for _ in range(self.header['dataref_count']):
+            name_len = struct.unpack('<H', f.read(2))[0]
+            name = f.read(name_len).decode('utf-8')
+            data_type = struct.unpack('<B', f.read(1))[0]
+            array_size = struct.unpack('<B', f.read(1))[0]
+            
+            type_name = ['float', 'int', 'string'][data_type]
+            
+            self.datarefs.append({
+                'name': name,
+                'type': type_name,
+                'array_size': array_size
+            })
+            
+    def _read_frames(self, f):
+        """Read all data frames"""
+        while True:
+            marker = f.read(4)
+            if marker == b'ENDR':
+                f.seek(-4, 1)
+                break
+            if marker != b'DATA':
+                raise ValueError(f"Invalid frame marker: {marker}")
+                
+            timestamp = struct.unpack('<f', f.read(4))[0]
+            values = self._read_frame_values(f)
+            
+            self.frames.append({
+                'timestamp': timestamp,
+                'values': values
+            })
+            
+    def _read_frame_values(self, f):
+        """Read values for one frame"""
+        values = []
+        for dr in self.datarefs:
+            if dr['array_size'] > 0:
+                arr = []
+                for _ in range(dr['array_size']):
+                    if dr['type'] == 'float':
+                        arr.append(struct.unpack('<f', f.read(4))[0])
+                    elif dr['type'] == 'int':
+                        arr.append(struct.unpack('<i', f.read(4))[0])
+                values.append(arr)
+            else:
+                if dr['type'] == 'float':
+                    values.append(struct.unpack('<f', f.read(4))[0])
+                elif dr['type'] == 'int':
+                    values.append(struct.unpack('<i', f.read(4))[0])
+                elif dr['type'] == 'string':
+                    str_len = struct.unpack('<B', f.read(1))[0]
+                    if str_len > 0:
+                        values.append(f.read(str_len).decode('utf-8'))
+                    else:
+                        values.append('')
+        return values
+        
+    def _read_footer(self, f):
+        """Read file footer"""
+        marker = f.read(4)
+        if marker != b'ENDR':
+            raise ValueError(f"Invalid footer marker: {marker}")
+            
+        total_records = struct.unpack('<I', f.read(4))[0]
+        end_timestamp = struct.unpack('<Q', f.read(8))[0]
+        
+        self.header['total_records'] = total_records
+        self.header['end_timestamp'] = end_timestamp
+        self.header['end_datetime'] = datetime.fromtimestamp(end_timestamp)
+        self.header['duration'] = end_timestamp - self.header['start_timestamp']
+        
+    def get_parameter_data(self, dataref_index: int, array_index: int = 0) -> tuple:
+        """Get timestamps and values for a specific parameter"""
+        timestamps = []
+        values = []
+        
+        dr = self.datarefs[dataref_index]
+        
+        for frame in self.frames:
+            timestamps.append(frame['timestamp'])
+            value = frame['values'][dataref_index]
+            
+            if dr['array_size'] > 0:
+                values.append(value[array_index])
+            else:
+                if dr['type'] == 'string':
+                    values.append(0)  # Can't plot strings
+                else:
+                    values.append(value)
+                    
+        return timestamps, values
+        
+    def get_all_plottable_parameters(self) -> List[Dict]:
+        """Get list of all parameters that can be plotted"""
+        params = []
+        for i, dr in enumerate(self.datarefs):
+            if dr['type'] == 'string':
+                continue
+            if dr['array_size'] > 0:
+                for j in range(dr['array_size']):
+                    params.append({
+                        'index': i,
+                        'array_index': j,
+                        'name': f"{dr['name']}[{j}]",
+                        'type': dr['type']
+                    })
+            else:
+                params.append({
+                    'index': i,
+                    'array_index': 0,
+                    'name': dr['name'],
+                    'type': dr['type']
+                })
+        return params
+        
+    def export_to_csv(self, output_path: str):
+        """Export data to CSV file"""
+        with open(output_path, 'w', newline='') as csvfile:
+            header_row = ['timestamp']
+            for dr in self.datarefs:
+                if dr['array_size'] > 0:
+                    for i in range(dr['array_size']):
+                        header_row.append(f"{dr['name']}[{i}]")
+                else:
+                    header_row.append(dr['name'])
+                    
+            writer = csv.writer(csvfile)
+            writer.writerow(header_row)
+            
+            for frame in self.frames:
+                row = [frame['timestamp']]
+                for value in frame['values']:
+                    if isinstance(value, list):
+                        row.extend(value)
+                    else:
+                        row.append(value)
+                writer.writerow(row)
+
+
+class PlotCanvas(FigureCanvas):
+    """Matplotlib canvas for plotting"""
+    
+    def __init__(self, parent=None):
+        self.fig = Figure(figsize=(10, 6), dpi=100)
+        self.fig.set_facecolor('#2b2b2b')
+        super().__init__(self.fig)
+        self.setParent(parent)
+        
+        # Dark theme for plots
+        plt.style.use('dark_background')
+        
+        self.axes = []
+        self.plots = []
+        
+    def clear_plots(self):
+        """Clear all plots"""
+        self.fig.clear()
+        self.axes = []
+        self.plots = []
+        self.draw()
+        
+    def plot_parameters(self, data: XDRData, parameters: List[Dict], 
+                        separate_axes: bool = False, show_grid: bool = True):
+        """Plot multiple parameters with their assigned colors"""
+        self.fig.clear()
+        self.axes = []
+        self.plots = []
+        
+        if not parameters:
+            self.draw()
+            return
+        
+        if separate_axes:
+            # Each parameter on its own axis
+            n = len(parameters)
+            for i, param in enumerate(parameters):
+                ax = self.fig.add_subplot(n, 1, i + 1)
+                ax.set_facecolor('#1e1e1e')
+                self.axes.append(ax)
+                
+                timestamps, values = data.get_parameter_data(
+                    param['index'], param['array_index']
+                )
+                
+                # Use assigned color from parameter
+                color = param.get('color', '#ffffff')
+                line, = ax.plot(timestamps, values, color=color, linewidth=1.0)
+                self.plots.append(line)
+                
+                ax.set_ylabel(self._short_name(param['name']), fontsize=8, color='white')
+                ax.tick_params(colors='white', labelsize=8)
+                ax.grid(show_grid, alpha=0.3)
+                
+                if i == len(parameters) - 1:
+                    ax.set_xlabel('Time (seconds)', color='white')
+                    
+        else:
+            # All parameters on same axis
+            ax = self.fig.add_subplot(111)
+            ax.set_facecolor('#1e1e1e')
+            self.axes.append(ax)
+            
+            for i, param in enumerate(parameters):
+                timestamps, values = data.get_parameter_data(
+                    param['index'], param['array_index']
+                )
+                
+                # Use assigned color from parameter
+                color = param.get('color', '#ffffff')
+                line, = ax.plot(timestamps, values, color=color, linewidth=1.0,
+                               label=self._short_name(param['name']))
+                self.plots.append(line)
+                
+            ax.set_xlabel('Time (seconds)', color='white')
+            ax.set_ylabel('Value', color='white')
+            ax.tick_params(colors='white')
+            ax.grid(show_grid, alpha=0.3)
+            ax.legend(loc='upper right', fontsize=8, facecolor='#2b2b2b', 
+                     edgecolor='white', labelcolor='white')
+            
+        self.fig.tight_layout()
+        self.draw()
+        
+    def _short_name(self, name: str) -> str:
+        """Get shortened parameter name for display"""
+        if len(name) > 40:
+            parts = name.split('/')
+            if len(parts) > 2:
+                return f".../{parts[-2]}/{parts[-1]}"
+        return name
+
+
+# Color palette for parameters - 20 distinct colors
+PARAMETER_COLORS = [
+    '#1f77b4',  # blue
+    '#ff7f0e',  # orange
+    '#2ca02c',  # green
+    '#d62728',  # red
+    '#9467bd',  # purple
+    '#8c564b',  # brown
+    '#e377c2',  # pink
+    '#7f7f7f',  # gray
+    '#bcbd22',  # olive
+    '#17becf',  # cyan
+    '#aec7e8',  # light blue
+    '#ffbb78',  # light orange
+    '#98df8a',  # light green
+    '#ff9896',  # light red
+    '#c5b0d5',  # light purple
+    '#c49c94',  # light brown
+    '#f7b6d2',  # light pink
+    '#c7c7c7',  # light gray
+    '#dbdb8d',  # light olive
+    '#9edae5',  # light cyan
+]
+
+
+class ParameterSelector(QWidget):
+    """Widget for selecting parameters to plot"""
+    
+    selectionChanged = Signal()
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.checkboxes = []
+        self.parameters = []
+        self.assigned_colors = {}  # Maps parameter name to assigned color
+        self.next_color_index = 0  # Next color to assign
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Search/filter
+        search_layout = QHBoxLayout()
+        search_layout.addWidget(QLabel("Filter:"))
+        self.filter_edit = QComboBox()
+        self.filter_edit.setEditable(True)
+        self.filter_edit.setInsertPolicy(QComboBox.NoInsert)
+        self.filter_edit.lineEdit().textChanged.connect(self.apply_filter)
+        search_layout.addWidget(self.filter_edit, 1)
+        layout.addLayout(search_layout)
+        
+        # Select all / none buttons
+        btn_layout = QHBoxLayout()
+        self.btn_select_all = QPushButton("Select All")
+        self.btn_select_all.clicked.connect(self.select_all)
+        self.btn_select_none = QPushButton("Select None")
+        self.btn_select_none.clicked.connect(self.select_none)
+        btn_layout.addWidget(self.btn_select_all)
+        btn_layout.addWidget(self.btn_select_none)
+        layout.addLayout(btn_layout)
+        
+        # Scrollable area for checkboxes
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
+        self.checkbox_container = QWidget()
+        self.checkbox_layout = QVBoxLayout(self.checkbox_container)
+        self.checkbox_layout.setSpacing(2)
+        self.checkbox_layout.setContentsMargins(5, 5, 5, 5)
+        self.checkbox_layout.addStretch()
+        
+        scroll.setWidget(self.checkbox_container)
+        layout.addWidget(scroll, 1)
+        
+    def set_parameters(self, parameters: List[Dict]):
+        """Set available parameters"""
+        # Clear existing
+        for cb in self.checkboxes:
+            self.checkbox_layout.removeWidget(cb)
+            cb.deleteLater()
+        self.checkboxes = []
+        self.parameters = parameters
+        
+        # Reset color assignments for new file
+        self.assigned_colors = {}
+        self.next_color_index = 0
+        
+        # Add filter suggestions
+        self.filter_edit.clear()
+        self.filter_edit.addItem("")
+        categories = set()
+        for p in parameters:
+            parts = p['name'].split('/')
+            if len(parts) > 2:
+                categories.add(parts[1])
+        for cat in sorted(categories):
+            self.filter_edit.addItem(cat)
+        
+        # Create checkboxes
+        for i, param in enumerate(parameters):
+            cb = QCheckBox(param['name'])
+            cb.stateChanged.connect(lambda state, idx=i: self.on_checkbox_changed(idx, state))
+            self.checkbox_layout.insertWidget(i, cb)
+            self.checkboxes.append(cb)
+            
+    def apply_filter(self, text: str):
+        """Filter visible parameters"""
+        text = text.lower()
+        for i, cb in enumerate(self.checkboxes):
+            visible = text == "" or text in self.parameters[i]['name'].lower()
+            cb.setVisible(visible)
+            
+    def select_all(self):
+        """Select all visible parameters"""
+        for cb in self.checkboxes:
+            if cb.isVisible():
+                cb.setChecked(True)
+                
+    def select_none(self):
+        """Deselect all parameters"""
+        for cb in self.checkboxes:
+            cb.setChecked(False)
+        # Clear color assignments when all deselected
+        self.assigned_colors = {}
+        self.next_color_index = 0
+        # Reset styles
+        for cb in self.checkboxes:
+            cb.setStyleSheet("")
+            
+    def on_checkbox_changed(self, index: int, state: int):
+        """Handle checkbox state change - assign color when checked"""
+        param_name = self.parameters[index]['name']
+        cb = self.checkboxes[index]
+        
+        if state == 2:  # Qt.Checked is 2
+            # Assign a new color if not already assigned
+            if param_name not in self.assigned_colors:
+                color = PARAMETER_COLORS[self.next_color_index % len(PARAMETER_COLORS)]
+                self.assigned_colors[param_name] = color
+                self.next_color_index += 1
+            
+            # Set text color
+            color = self.assigned_colors[param_name]
+            cb.setStyleSheet(f"color: {color};")
+        else:
+            # Reset to default color
+            cb.setStyleSheet("")
+        
+        self.selectionChanged.emit()
+        
+    def get_selected_parameters(self) -> List[Dict]:
+        """Get list of selected parameters with their assigned colors"""
+        selected = []
+        for i, cb in enumerate(self.checkboxes):
+            if cb.isChecked():
+                param = self.parameters[i].copy()
+                param_name = param['name']
+                # Get assigned color
+                param['color'] = self.assigned_colors.get(param_name, '#ffffff')
+                selected.append(param)
+        return selected
+
+
+class FileInfoWidget(QWidget):
+    """Widget displaying file information"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        self.info_label = QLabel("No file loaded")
+        self.info_label.setWordWrap(True)
+        self.info_label.setStyleSheet("QLabel { background-color: #1e1e1e; padding: 10px; border-radius: 5px; }")
+        layout.addWidget(self.info_label)
+        
+    def update_info(self, data: XDRData):
+        """Update displayed information"""
+        if not data.header:
+            self.info_label.setText("No file loaded")
+            return
+            
+        h = data.header
+        info = f"""<b>File:</b> {Path(data.filepath).name}<br>
+<b>Recording Level:</b> {h.get('level_name', 'Unknown')} (Level {h.get('level', '?')})<br>
+<b>Recording Interval:</b> {h.get('interval', 0):.3f} sec ({1/h.get('interval', 1):.1f} Hz)<br>
+<b>Start Time:</b> {h.get('start_datetime', 'Unknown')}<br>
+<b>End Time:</b> {h.get('end_datetime', 'Unknown')}<br>
+<b>Duration:</b> {h.get('duration', 0)} seconds<br>
+<b>Total Frames:</b> {h.get('total_records', 0)}<br>
+<b>Parameters:</b> {h.get('dataref_count', 0)}<br>
+<b>File Size:</b> {Path(data.filepath).stat().st_size:,} bytes"""
+        
+        self.info_label.setText(info)
+
+
+class DataTableWidget(QWidget):
+    """Widget for displaying data in table format"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.data = None
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Controls
+        controls = QHBoxLayout()
+        controls.addWidget(QLabel("Show frames:"))
+        self.spin_start = QSpinBox()
+        self.spin_start.setMinimum(0)
+        self.spin_start.setValue(0)
+        controls.addWidget(self.spin_start)
+        controls.addWidget(QLabel("to"))
+        self.spin_end = QSpinBox()
+        self.spin_end.setMinimum(0)
+        self.spin_end.setValue(100)
+        controls.addWidget(self.spin_end)
+        self.btn_refresh = QPushButton("Refresh")
+        self.btn_refresh.clicked.connect(self.refresh_table)
+        controls.addWidget(self.btn_refresh)
+        controls.addStretch()
+        layout.addLayout(controls)
+        
+        # Table
+        self.table = QTableWidget()
+        self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.table)
+        
+    def set_data(self, data: XDRData):
+        """Set data source"""
+        self.data = data
+        if data and data.frames:
+            self.spin_start.setMaximum(len(data.frames) - 1)
+            self.spin_end.setMaximum(len(data.frames) - 1)
+            self.spin_end.setValue(min(100, len(data.frames) - 1))
+        self.refresh_table()
+        
+    def refresh_table(self):
+        """Refresh table contents"""
+        if not self.data or not self.data.frames:
+            self.table.clear()
+            return
+            
+        start = self.spin_start.value()
+        end = min(self.spin_end.value() + 1, len(self.data.frames))
+        
+        # Build headers
+        headers = ['Frame', 'Timestamp']
+        for dr in self.data.datarefs:
+            if dr['array_size'] > 0:
+                for i in range(dr['array_size']):
+                    headers.append(f"{dr['name']}[{i}]")
+            else:
+                headers.append(dr['name'])
+                
+        self.table.setColumnCount(len(headers))
+        self.table.setRowCount(end - start)
+        self.table.setHorizontalHeaderLabels(headers)
+        
+        # Fill data
+        for row, frame_idx in enumerate(range(start, end)):
+            frame = self.data.frames[frame_idx]
+            self.table.setItem(row, 0, QTableWidgetItem(str(frame_idx)))
+            self.table.setItem(row, 1, QTableWidgetItem(f"{frame['timestamp']:.3f}"))
+            
+            col = 2
+            for value in frame['values']:
+                if isinstance(value, list):
+                    for v in value:
+                        self.table.setItem(row, col, QTableWidgetItem(f"{v:.4f}" if isinstance(v, float) else str(v)))
+                        col += 1
+                else:
+                    self.table.setItem(row, col, QTableWidgetItem(f"{value:.4f}" if isinstance(value, float) else str(value)))
+                    col += 1
+
+
+class MainWindow(QMainWindow):
+    """Main application window"""
+    
+    def __init__(self):
+        super().__init__()
+        self.data = XDRData()
+        self.setup_ui()
+        self.setup_menu()
+        self.setup_toolbar()
+        
+    def setup_ui(self):
+        self.setWindowTitle("XBlackBox XDR Viewer")
+        self.setMinimumSize(1200, 800)
+        self.setStyleSheet(self.get_stylesheet())
+        
+        central = QWidget()
+        self.setCentralWidget(central)
+        main_layout = QVBoxLayout(central)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Main splitter
+        splitter = QSplitter(Qt.Horizontal)
+        
+        # Left panel - Parameter selection
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # File info
+        self.file_info = FileInfoWidget()
+        left_layout.addWidget(self.file_info)
+        
+        # Parameter selector
+        param_group = QGroupBox("Parameters to Plot")
+        param_layout = QVBoxLayout(param_group)
+        self.param_selector = ParameterSelector()
+        self.param_selector.selectionChanged.connect(self.update_plot)
+        param_layout.addWidget(self.param_selector)
+        left_layout.addWidget(param_group, 1)
+        
+        splitter.addWidget(left_panel)
+        
+        # Right panel - Tabs for plot and data
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Plot options
+        options_layout = QHBoxLayout()
+        
+        self.cb_separate_axes = QCheckBox("Separate Axes")
+        self.cb_separate_axes.stateChanged.connect(self.update_plot)
+        options_layout.addWidget(self.cb_separate_axes)
+        
+        self.cb_grid = QCheckBox("Show Grid")
+        self.cb_grid.setChecked(True)
+        self.cb_grid.stateChanged.connect(self.update_plot)
+        options_layout.addWidget(self.cb_grid)
+        
+        options_layout.addStretch()
+        
+        self.btn_plot = QPushButton("Update Plot")
+        self.btn_plot.clicked.connect(self.update_plot)
+        options_layout.addWidget(self.btn_plot)
+        
+        right_layout.addLayout(options_layout)
+        
+        # Tab widget
+        self.tabs = QTabWidget()
+        
+        # Plot tab
+        plot_widget = QWidget()
+        plot_layout = QVBoxLayout(plot_widget)
+        plot_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.canvas = PlotCanvas(self)
+        self.toolbar = NavigationToolbar(self.canvas, self)
+        plot_layout.addWidget(self.toolbar)
+        plot_layout.addWidget(self.canvas, 1)
+        
+        self.tabs.addTab(plot_widget, "Plot")
+        
+        # Data table tab
+        self.data_table = DataTableWidget()
+        self.tabs.addTab(self.data_table, "Data Table")
+        
+        right_layout.addWidget(self.tabs, 1)
+        
+        splitter.addWidget(right_panel)
+        splitter.setSizes([300, 900])
+        
+        main_layout.addWidget(splitter)
+        
+        # Status bar
+        self.statusBar().showMessage("Ready - Open an XDR file to begin")
+        
+    def setup_menu(self):
+        menubar = self.menuBar()
+        
+        # File menu
+        file_menu = menubar.addMenu("&File")
+        
+        open_action = QAction("&Open XDR File...", self)
+        open_action.setShortcut("Ctrl+O")
+        open_action.triggered.connect(self.open_file)
+        file_menu.addAction(open_action)
+        
+        file_menu.addSeparator()
+        
+        export_csv_action = QAction("Export to &CSV...", self)
+        export_csv_action.setShortcut("Ctrl+E")
+        export_csv_action.triggered.connect(self.export_csv)
+        file_menu.addAction(export_csv_action)
+        
+        export_plot_action = QAction("Save Plot &Image...", self)
+        export_plot_action.setShortcut("Ctrl+S")
+        export_plot_action.triggered.connect(self.save_plot)
+        file_menu.addAction(export_plot_action)
+        
+        file_menu.addSeparator()
+        
+        exit_action = QAction("E&xit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+        
+        # View menu
+        view_menu = menubar.addMenu("&View")
+        
+        clear_plot_action = QAction("&Clear Plot", self)
+        clear_plot_action.triggered.connect(self.canvas.clear_plots)
+        view_menu.addAction(clear_plot_action)
+        
+        # Help menu
+        help_menu = menubar.addMenu("&Help")
+        
+        about_action = QAction("&About", self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
+        
+    def setup_toolbar(self):
+        toolbar = QToolBar()
+        toolbar.setMovable(False)
+        self.addToolBar(toolbar)
+        
+        open_action = QAction(self.style().standardIcon(QStyle.SP_DialogOpenButton), "Open", self)
+        open_action.triggered.connect(self.open_file)
+        toolbar.addAction(open_action)
+        
+        toolbar.addSeparator()
+        
+        export_action = QAction(self.style().standardIcon(QStyle.SP_DialogSaveButton), "Export CSV", self)
+        export_action.triggered.connect(self.export_csv)
+        toolbar.addAction(export_action)
+        
+    def open_file(self):
+        """Open XDR file"""
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Open XDR File", "", "XDR Files (*.xdr);;All Files (*)"
+        )
+        
+        if not filepath:
+            return
+            
+        try:
+            self.data.read(filepath)
+            self.file_info.update_info(self.data)
+            self.param_selector.set_parameters(self.data.get_all_plottable_parameters())
+            self.data_table.set_data(self.data)
+            self.canvas.clear_plots()
+            self.statusBar().showMessage(f"Loaded: {filepath} ({len(self.data.frames)} frames)")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to open file:\n{str(e)}")
+            
+    def update_plot(self):
+        """Update the plot with selected parameters"""
+        selected = self.param_selector.get_selected_parameters()
+        
+        if not selected:
+            self.canvas.clear_plots()
+            return
+            
+        self.canvas.plot_parameters(
+            self.data,
+            selected,
+            separate_axes=self.cb_separate_axes.isChecked(),
+            show_grid=self.cb_grid.isChecked()
+        )
+        
+        self.statusBar().showMessage(f"Plotting {len(selected)} parameter(s)")
+        
+    def export_csv(self):
+        """Export data to CSV"""
+        if not self.data.frames:
+            QMessageBox.warning(self, "Warning", "No data to export. Please open an XDR file first.")
+            return
+            
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Export to CSV", "", "CSV Files (*.csv);;All Files (*)"
+        )
+        
+        if filepath:
+            try:
+                self.data.export_to_csv(filepath)
+                self.statusBar().showMessage(f"Exported to: {filepath}")
+                QMessageBox.information(self, "Success", f"Data exported to:\n{filepath}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to export:\n{str(e)}")
+                
+    def save_plot(self):
+        """Save plot as image"""
+        if not self.param_selector.get_selected_parameters():
+            QMessageBox.warning(self, "Warning", "No plot to save. Please select parameters first.")
+            return
+            
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Save Plot", "", "PNG Image (*.png);;PDF Document (*.pdf);;SVG Image (*.svg)"
+        )
+        
+        if filepath:
+            try:
+                self.canvas.fig.savefig(filepath, dpi=150, bbox_inches='tight',
+                                        facecolor='#2b2b2b', edgecolor='none')
+                self.statusBar().showMessage(f"Plot saved to: {filepath}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to save plot:\n{str(e)}")
+                
+    def show_about(self):
+        """Show about dialog"""
+        QMessageBox.about(
+            self,
+            "About XBlackBox XDR Viewer",
+            """<h3>XBlackBox XDR Viewer</h3>
+            <p>Version 1.0</p>
+            <p>A tool for visualizing X-Plane flight data recordings from XBlackBox plugin.</p>
+            <p><b>Features:</b></p>
+            <ul>
+                <li>Open and parse .xdr flight data files</li>
+                <li>Plot any recorded parameter over time</li>
+                <li>Compare multiple parameters</li>
+                <li>Export data to CSV format</li>
+                <li>Save plots as images</li>
+            </ul>
+            """
+        )
+        
+    def get_stylesheet(self):
+        """Get application stylesheet"""
+        return """
+            QMainWindow {
+                background-color: #2b2b2b;
+            }
+            QWidget {
+                background-color: #2b2b2b;
+                color: #ffffff;
+            }
+            QMenuBar {
+                background-color: #1e1e1e;
+            }
+            QMenuBar::item:selected {
+                background-color: #3d3d3d;
+            }
+            QMenu {
+                background-color: #1e1e1e;
+                border: 1px solid #3d3d3d;
+            }
+            QMenu::item:selected {
+                background-color: #3d3d3d;
+            }
+            QToolBar {
+                background-color: #1e1e1e;
+                border: none;
+                spacing: 5px;
+            }
+            QStatusBar {
+                background-color: #1e1e1e;
+            }
+            QGroupBox {
+                border: 1px solid #3d3d3d;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+            QPushButton {
+                background-color: #3d3d3d;
+                border: 1px solid #555555;
+                border-radius: 4px;
+                padding: 5px 15px;
+            }
+            QPushButton:hover {
+                background-color: #4d4d4d;
+            }
+            QPushButton:pressed {
+                background-color: #2d2d2d;
+            }
+            QCheckBox {
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+            }
+            QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+                background-color: #1e1e1e;
+                border: 1px solid #3d3d3d;
+                border-radius: 4px;
+                padding: 3px;
+            }
+            QScrollArea {
+                border: 1px solid #3d3d3d;
+                border-radius: 4px;
+            }
+            QTableWidget {
+                background-color: #1e1e1e;
+                alternate-background-color: #252525;
+                gridline-color: #3d3d3d;
+            }
+            QHeaderView::section {
+                background-color: #2b2b2b;
+                border: 1px solid #3d3d3d;
+                padding: 4px;
+            }
+            QTabWidget::pane {
+                border: 1px solid #3d3d3d;
+            }
+            QTabBar::tab {
+                background-color: #1e1e1e;
+                border: 1px solid #3d3d3d;
+                padding: 8px 16px;
+            }
+            QTabBar::tab:selected {
+                background-color: #2b2b2b;
+                border-bottom-color: #2b2b2b;
+            }
+            QSplitter::handle {
+                background-color: #3d3d3d;
+            }
+        """
+
+
+def main():
+    app = QApplication(sys.argv)
+    app.setStyle('Fusion')
+    
+    window = MainWindow()
+    window.show()
+    
+    # If a file was passed as argument, open it
+    if len(sys.argv) > 1:
+        window.data.read(sys.argv[1])
+        window.file_info.update_info(window.data)
+        window.param_selector.set_parameters(window.data.get_all_plottable_parameters())
+        window.data_table.set_data(window.data)
+    
+    sys.exit(app.exec())
+
+
+if __name__ == '__main__':
+    main()
