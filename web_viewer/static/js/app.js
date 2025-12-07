@@ -559,7 +559,20 @@ async function updatePlot() {
     ui.showLoading('Loading data...');
 
     try {
-        const data = await api.getData(state.selectedParams, 1);
+        // Smart downsampling based on data size
+        const frameCount = state.header?.frame_count || 10000;
+        let downsample = 1;
+        
+        // Optimize rendering for large datasets
+        if (frameCount > 50000) {
+            downsample = Math.ceil(frameCount / 10000); // Keep ~10k points max
+        } else if (frameCount > 20000) {
+            downsample = Math.ceil(frameCount / 15000); // Keep ~15k points
+        }
+        
+        console.log(`Data points: ${frameCount}, Downsampling: ${downsample}x`);
+        
+        const data = await api.getData(state.selectedParams, downsample);
         
         if (data.error) {
             throw new Error(data.error);
@@ -573,9 +586,9 @@ async function updatePlot() {
                 x: paramData.timestamps,
                 y: paramData.values,
                 name: name,
-                type: 'scatter',
+                type: frameCount > 10000 ? 'scattergl' : 'scatter', // Use WebGL for large datasets
                 mode: 'lines',
-                line: { color: state.colors[colorIdx], width: 1.5 }
+                line: { color: state.colors[colorIdx], width: frameCount > 10000 ? 1 : 1.5 }
             });
         }
 
@@ -589,13 +602,15 @@ async function updatePlot() {
                 title: 'Time (s)',
                 showgrid: showGrid,
                 gridcolor: getComputedStyle(document.body).getPropertyValue('--border-color'),
-                color: getComputedStyle(document.body).getPropertyValue('--text-secondary')
+                color: getComputedStyle(document.body).getPropertyValue('--text-secondary'),
+                zeroline: false
             },
             yaxis: {
                 title: 'Value',
                 showgrid: showGrid,
                 gridcolor: getComputedStyle(document.body).getPropertyValue('--border-color'),
-                color: getComputedStyle(document.body).getPropertyValue('--text-secondary')
+                color: getComputedStyle(document.body).getPropertyValue('--text-secondary'),
+                zeroline: false
             },
             legend: {
                 orientation: 'h',
@@ -609,7 +624,14 @@ async function updatePlot() {
         const config = {
             responsive: true,
             displayModeBar: true,
-            modeBarButtonsToRemove: ['lasso2d', 'select2d']
+            displaylogo: false,
+            modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+            toImageButtonOptions: {
+                format: 'png',
+                filename: 'xblackbox_plot',
+                height: 800,
+                width: 1200
+            }
         };
 
         // Create plot with animation
