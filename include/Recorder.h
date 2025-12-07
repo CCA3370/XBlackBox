@@ -7,6 +7,22 @@
 #include <vector>
 #include <memory>
 #include <chrono>
+#include <string>
+#include <cstring>
+
+// Airport information structure
+struct AirportInfo {
+    char icao[8];      // ICAO code (e.g., "KSFO")
+    char name[256];    // Airport name
+    float lat;         // Latitude
+    float lon;         // Longitude
+    bool valid;        // Whether airport was detected
+    
+    AirportInfo() : lat(0.0f), lon(0.0f), valid(false) {
+        memset(icao, 0, sizeof(icao));
+        memset(name, 0, sizeof(name));
+    }
+};
 
 class Recorder {
 public:
@@ -44,10 +60,15 @@ private:
     void WriteHeader();
     void WriteFooter();
     void RecordFrame();
+    void UpdateHeaderWithArrival();
     
     // Auto recording
     bool CheckAutoStartCondition();
     bool CheckAutoStopCondition();
+    
+    // Airport detection
+    AirportInfo DetectNearestAirport(float lat, float lon);
+    float CalculateDistance(float lat1, float lon1, float lat2, float lon2);
     
     // Binary writing helpers (little-endian)
     void WriteUInt8(uint8_t value);
@@ -72,6 +93,10 @@ private:
     // Statistics
     int m_recordCount;
     size_t m_bytesWritten;
+    
+    // Airport information
+    AirportInfo m_departureAirport;
+    AirportInfo m_arrivalAirport;
     
     // Performance tracking
     double m_averageRecordTime;

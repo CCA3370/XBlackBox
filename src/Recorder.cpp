@@ -3,6 +3,16 @@
 #include <iomanip>
 #include <sstream>
 #include <cstring>
+#include <cmath>
+#include "XPLMNavigation.h"
+
+// Constants for distance calculation
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+// Earth mean radius in nautical miles
+// Using standard value: 6371.0 km = 3440.065 nm (1 nm = 1.852 km)
+#define EARTH_RADIUS_NM 3440.065
 
 Recorder& Recorder::Instance() {
     static Recorder instance;
@@ -72,6 +82,21 @@ bool Recorder::Start() {
         return false;
     }
     
+    // Detect departure airport
+    XPLMDataRef latRef = XPLMFindDataRef("sim/flightmodel/position/latitude");
+    XPLMDataRef lonRef = XPLMFindDataRef("sim/flightmodel/position/longitude");
+    if (latRef && lonRef) {
+        float lat = XPLMGetDataf(latRef);
+        float lon = XPLMGetDataf(lonRef);
+        m_departureAirport = DetectNearestAirport(lat, lon);
+        if (m_departureAirport.valid) {
+            LogInfo("Departure airport detected: " + std::string(m_departureAirport.icao) + 
+                    " - " + std::string(m_departureAirport.name));
+        } else {
+            LogInfo("No departure airport detected (not near any airport)");
+        }
+    }
+    
     // Write header with error checking
     try {
         WriteHeader();
@@ -114,11 +139,35 @@ bool Recorder::Stop() {
         return false;
     }
     
+    // Detect arrival airport
+    XPLMDataRef latRef = XPLMFindDataRef("sim/flightmodel/position/latitude");
+    XPLMDataRef lonRef = XPLMFindDataRef("sim/flightmodel/position/longitude");
+    if (latRef && lonRef) {
+        float lat = XPLMGetDataf(latRef);
+        float lon = XPLMGetDataf(lonRef);
+        m_arrivalAirport = DetectNearestAirport(lat, lon);
+        if (m_arrivalAirport.valid) {
+            LogInfo("Arrival airport detected: " + std::string(m_arrivalAirport.icao) + 
+                    " - " + std::string(m_arrivalAirport.name));
+        } else {
+            LogInfo("No arrival airport detected (not near any airport)");
+        }
+    }
+    
     // Flush any remaining buffered data
     try {
         FlushBuffer();
     } catch (const std::exception& e) {
         LogError(std::string("Exception flushing buffer: ") + e.what());
+    }
+    
+    // Update header with arrival airport information
+    if (m_arrivalAirport.valid) {
+        try {
+            UpdateHeaderWithArrival();
+        } catch (const std::exception& e) {
+            LogError(std::string("Exception updating header with arrival: ") + e.what());
+        }
     }
     
     // Write footer with error checking
@@ -236,8 +285,8 @@ void Recorder::WriteHeader() {
     }
     m_bytesWritten += 4;
     
-    // Version (2 bytes)
-    WriteUInt16(1);
+    // Version (2 bytes) - updating to version 2 for airport info
+    WriteUInt16(2);
     
     // Recording level (1 byte)
     WriteUInt8(static_cast<uint8_t>(Settings::Instance().GetRecordingLevel()));
@@ -247,6 +296,32 @@ void Recorder::WriteHeader() {
     
     // Start timestamp (8 bytes)
     WriteUInt64(static_cast<uint64_t>(m_recordingStartTime));
+    
+    // Airport information (new in version 2)
+    // Departure airport ICAO (8 bytes, null-padded)
+    m_currentFile->write(m_departureAirport.icao, 8);
+    m_bytesWritten += 8;
+    
+    // Departure airport coordinates (8 bytes: 2 floats)
+    WriteFloat(m_departureAirport.lat);
+    WriteFloat(m_departureAirport.lon);
+    
+    // Departure airport name (256 bytes, null-padded)
+    m_currentFile->write(m_departureAirport.name, 256);
+    m_bytesWritten += 256;
+    
+    // Arrival airport fields are written as empty initially
+    // They will be filled when updating header at Stop()
+    char empty_icao[8] = {0};
+    m_currentFile->write(empty_icao, 8);
+    m_bytesWritten += 8;
+    
+    WriteFloat(0.0f);  // Arrival lat (placeholder)
+    WriteFloat(0.0f);  // Arrival lon (placeholder)
+    
+    char empty_name[256] = {0};
+    m_currentFile->write(empty_name, 256);
+    m_bytesWritten += 256;
     
     // Dataref count (2 bytes)
     const auto& datarefs = DatarefManager::Instance().GetDatarefs();
@@ -314,6 +389,62 @@ void Recorder::WriteFooter() {
         m_currentFile->flush();
     } else {
         LogError("File stream error after writing footer");
+    }
+}
+
+void Recorder::UpdateHeaderWithArrival() {
+    if (!m_currentFile) {
+        LogError("UpdateHeaderWithArrival called with null file");
+        return;
+    }
+    
+    // Calculate offset to arrival airport fields in header
+    // Header structure (version 2):
+    // - Magic (4) + Version (2) + Level (1) + Interval (4) + Start timestamp (8) = 19 bytes
+    // - Departure ICAO (8) + Departure lat/lon (8) + Departure name (256) = 272 bytes
+    // - Arrival ICAO (8) at offset 19 + 272 = 291
+    const std::streamoff arrivalIcaoOffset = 291;
+    
+    // Save current position
+    std::streampos currentPos = m_currentFile->tellp();
+    
+    // Seek to arrival ICAO field
+    m_currentFile->seekp(arrivalIcaoOffset);
+    
+    // Write arrival airport ICAO (8 bytes, null-padded)
+    m_currentFile->write(m_arrivalAirport.icao, 8);
+    
+    // Write arrival coordinates (8 bytes: 2 floats)
+    // We need to write these manually since WriteFloat updates m_bytesWritten
+    uint32_t latBits, lonBits;
+    std::memcpy(&latBits, &m_arrivalAirport.lat, sizeof(float));
+    std::memcpy(&lonBits, &m_arrivalAirport.lon, sizeof(float));
+    
+    // Write as little-endian
+    uint8_t latBytes[4] = {
+        static_cast<uint8_t>(latBits & 0xFF),
+        static_cast<uint8_t>((latBits >> 8) & 0xFF),
+        static_cast<uint8_t>((latBits >> 16) & 0xFF),
+        static_cast<uint8_t>((latBits >> 24) & 0xFF)
+    };
+    m_currentFile->write(reinterpret_cast<const char*>(latBytes), 4);
+    
+    uint8_t lonBytes[4] = {
+        static_cast<uint8_t>(lonBits & 0xFF),
+        static_cast<uint8_t>((lonBits >> 8) & 0xFF),
+        static_cast<uint8_t>((lonBits >> 16) & 0xFF),
+        static_cast<uint8_t>((lonBits >> 24) & 0xFF)
+    };
+    m_currentFile->write(reinterpret_cast<const char*>(lonBytes), 4);
+    
+    // Write arrival name (256 bytes, null-padded)
+    m_currentFile->write(m_arrivalAirport.name, 256);
+    
+    // Restore file position
+    m_currentFile->seekp(currentPos);
+    
+    if (!m_currentFile->good()) {
+        LogError("File stream error after updating arrival airport");
     }
 }
 
@@ -591,4 +722,72 @@ void Recorder::FlushBuffer() {
     if (m_currentFile) {
         m_currentFile->flush();
     }
+}
+
+// Airport detection using X-Plane Navigation API
+AirportInfo Recorder::DetectNearestAirport(float lat, float lon) {
+    AirportInfo result;
+    
+    // Find nearest airport using X-Plane navigation database
+    XPLMNavRef navRef = XPLMFindNavAid(
+        nullptr,              // name fragment (null = any)
+        nullptr,              // ID fragment (null = any)
+        &lat,                 // search near this latitude
+        &lon,                 // search near this longitude
+        nullptr,              // frequency (null = any)
+        xplm_Nav_Airport      // only airports
+    );
+    
+    if (navRef != XPLM_NAV_NOT_FOUND) {
+        XPLMNavType navType = xplm_Nav_Unknown;
+        float navLat = 0.0f, navLon = 0.0f;
+        char navID[32] = {0};
+        char navName[256] = {0};
+        
+        XPLMGetNavAidInfo(navRef, &navType, &navLat, &navLon, 
+                         nullptr, nullptr, nullptr,
+                         navID, navName, nullptr);
+        
+        // Calculate distance to verify it's nearby (within 5 nm)
+        float distance = CalculateDistance(lat, lon, navLat, navLon);
+        
+        if (distance <= 5.0f) {
+            // Airport is close enough
+            result.valid = true;
+            result.lat = navLat;
+            result.lon = navLon;
+            
+            // Safely copy ICAO code with explicit null termination
+            std::strncpy(result.icao, navID, sizeof(result.icao) - 1);
+            result.icao[sizeof(result.icao) - 1] = '\0';
+            
+            // Safely copy name with explicit null termination
+            std::strncpy(result.name, navName, sizeof(result.name) - 1);
+            result.name[sizeof(result.name) - 1] = '\0';
+        }
+    }
+    
+    return result;
+}
+
+// Calculate great circle distance between two coordinates in nautical miles
+float Recorder::CalculateDistance(float lat1, float lon1, float lat2, float lon2) {
+    // Convert degrees to radians
+    float lat1Rad = lat1 * M_PI / 180.0f;
+    float lon1Rad = lon1 * M_PI / 180.0f;
+    float lat2Rad = lat2 * M_PI / 180.0f;
+    float lon2Rad = lon2 * M_PI / 180.0f;
+    
+    // Haversine formula
+    float dLat = lat2Rad - lat1Rad;
+    float dLon = lon2Rad - lon1Rad;
+    
+    float a = std::sin(dLat / 2.0f) * std::sin(dLat / 2.0f) +
+              std::cos(lat1Rad) * std::cos(lat2Rad) *
+              std::sin(dLon / 2.0f) * std::sin(dLon / 2.0f);
+    
+    float c = 2.0f * std::atan2(std::sqrt(a), std::sqrt(1.0f - a));
+    
+    // Distance in nautical miles
+    return EARTH_RADIUS_NM * c;
 }

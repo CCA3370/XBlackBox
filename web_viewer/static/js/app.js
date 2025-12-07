@@ -301,6 +301,38 @@ const ui = {
         document.getElementById('info-duration').textContent = `${mins}:${secs.padStart(4, '0')}`;
         document.getElementById('info-frames').textContent = frameCount?.toLocaleString() || 'N/A';
         document.getElementById('info-params').textContent = header.dataref_count || 'N/A';
+        
+        // Display airport information (Version 2+)
+        const airportInfo = document.getElementById('airport-info');
+        if (header.version >= 2 && (header.departure_airport || header.arrival_airport)) {
+            airportInfo.classList.remove('hidden');
+            
+            // Format departure airport
+            if (header.departure_airport && header.departure_airport.valid) {
+                const dep = header.departure_airport;
+                document.getElementById('info-departure').textContent = 
+                    `${dep.icao} - ${dep.name}`;
+                document.getElementById('info-departure').title = 
+                    `${dep.icao}: ${dep.name}\nCoordinates: ${dep.lat.toFixed(4)}, ${dep.lon.toFixed(4)}`;
+            } else {
+                document.getElementById('info-departure').textContent = 'Not detected';
+                document.getElementById('info-departure').title = 'Aircraft was not near any airport';
+            }
+            
+            // Format arrival airport
+            if (header.arrival_airport && header.arrival_airport.valid) {
+                const arr = header.arrival_airport;
+                document.getElementById('info-arrival').textContent = 
+                    `${arr.icao} - ${arr.name}`;
+                document.getElementById('info-arrival').title = 
+                    `${arr.icao}: ${arr.name}\nCoordinates: ${arr.lat.toFixed(4)}, ${arr.lon.toFixed(4)}`;
+            } else {
+                document.getElementById('info-arrival').textContent = 'Not detected';
+                document.getElementById('info-arrival').title = 'Aircraft was not near any airport';
+            }
+        } else {
+            airportInfo.classList.add('hidden');
+        }
     },
 
     enableButtons() {
