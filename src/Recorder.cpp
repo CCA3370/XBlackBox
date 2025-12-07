@@ -181,7 +181,7 @@ void Recorder::Update(float deltaTime) {
         if (CheckAutoStartCondition()) {
             Start();
         }
-        // Exit early if we started recording to avoid double processing
+        // Exit early if Start() failed (still not recording)
         if (!m_isRecording) {
             return;
         }
@@ -472,9 +472,9 @@ bool Recorder::CheckAutoStartCondition() {
         }
         
         for (int i = 0; i < MAX_ENGINES; i++) {
-            int running[1] = {0};
-            int count = XPLMGetDatavi(engRef, running, i, 1);
-            if (count > 0 && running[0] == 1) {
+            int running = 0;
+            int count = XPLMGetDatavi(engRef, &running, i, 1);
+            if (count > 0 && running == 1) {
                 return true;
             }
         }
@@ -513,9 +513,9 @@ bool Recorder::CheckAutoStopCondition() {
         }
         
         for (int i = 0; i < MAX_ENGINES; i++) {
-            int running[1] = {0};
-            int count = XPLMGetDatavi(engRef, running, i, 1);
-            if (count > 0 && running[0] == 1) {
+            int running = 0;
+            int count = XPLMGetDatavi(engRef, &running, i, 1);
+            if (count > 0 && running == 1) {
                 return false;
             }
         }

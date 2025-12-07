@@ -381,7 +381,8 @@ void DatarefManager::ReadCurrentValues() {
             } else if (dr.type == DatarefType::String) {
                 char buffer[512] = {0};
                 int len = XPLMGetDatab(dr.ref, buffer, 0, sizeof(buffer) - 1);
-                if (len > 0 && len < static_cast<int>(sizeof(buffer))) {
+                // Ensure len is valid and doesn't exceed buffer size
+                if (len > 0 && len <= static_cast<int>(sizeof(buffer) - 1)) {
                     buffer[len] = '\0';
                     m_stringValues.push_back(std::string(buffer));
                 } else {

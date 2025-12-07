@@ -99,10 +99,15 @@ void Settings::Load() {
             } else if (key == "autoMode") {
                 m_autoMode = (value == "true" || value == "1");
             } else if (key == "autoStartCondition") {
-                if (value == "ground_speed") m_autoStartCondition = AutoCondition::GroundSpeed;
-                else if (value == "engine_running") m_autoStartCondition = AutoCondition::EngineRunning;
-                else if (value == "weight_on_wheels") m_autoStartCondition = AutoCondition::WeightOnWheels;
-                else LogError("Invalid auto start condition: " + value);
+                if (value == "ground_speed") {
+                    m_autoStartCondition = AutoCondition::GroundSpeed;
+                } else if (value == "engine_running") {
+                    m_autoStartCondition = AutoCondition::EngineRunning;
+                } else if (value == "weight_on_wheels") {
+                    m_autoStartCondition = AutoCondition::WeightOnWheels;
+                } else {
+                    LogError("Invalid auto start condition: " + value);
+                }
             } else if (key == "autoStartThreshold") {
                 float threshold = std::stof(value);
                 if (threshold >= 0.0f) {
@@ -111,10 +116,15 @@ void Settings::Load() {
                     LogError("Invalid auto start threshold: " + value);
                 }
             } else if (key == "autoStopCondition") {
-                if (value == "ground_speed") m_autoStopCondition = AutoCondition::GroundSpeed;
-                else if (value == "engine_running") m_autoStopCondition = AutoCondition::EngineRunning;
-                else if (value == "weight_on_wheels") m_autoStopCondition = AutoCondition::WeightOnWheels;
-                else LogError("Invalid auto stop condition: " + value);
+                if (value == "ground_speed") {
+                    m_autoStopCondition = AutoCondition::GroundSpeed;
+                } else if (value == "engine_running") {
+                    m_autoStopCondition = AutoCondition::EngineRunning;
+                } else if (value == "weight_on_wheels") {
+                    m_autoStopCondition = AutoCondition::WeightOnWheels;
+                } else {
+                    LogError("Invalid auto stop condition: " + value);
+                }
             } else if (key == "autoStopThreshold") {
                 float threshold = std::stof(value);
                 if (threshold >= 0.0f) {
