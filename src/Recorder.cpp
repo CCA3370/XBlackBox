@@ -755,13 +755,21 @@ AirportInfo Recorder::DetectNearestAirport(float lat, float lon) {
             result.lat = navLat;
             result.lon = navLon;
             
-            // Safely copy ICAO code
-            size_t icaoLen = std::min(strlen(navID), sizeof(result.icao) - 1);
+            // Safely copy ICAO code - use strnlen for safety
+            size_t icaoLen = 0;
+            for (size_t i = 0; i < sizeof(navID) && navID[i] != '\0'; i++) {
+                icaoLen = i + 1;
+            }
+            icaoLen = std::min(icaoLen, sizeof(result.icao) - 1);
             std::strncpy(result.icao, navID, icaoLen);
             result.icao[icaoLen] = '\0';
             
-            // Safely copy name
-            size_t nameLen = std::min(strlen(navName), sizeof(result.name) - 1);
+            // Safely copy name - use strnlen for safety
+            size_t nameLen = 0;
+            for (size_t i = 0; i < sizeof(navName) && navName[i] != '\0'; i++) {
+                nameLen = i + 1;
+            }
+            nameLen = std::min(nameLen, sizeof(result.name) - 1);
             std::strncpy(result.name, navName, nameLen);
             result.name[nameLen] = '\0';
         }

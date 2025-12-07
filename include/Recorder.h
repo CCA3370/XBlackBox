@@ -8,6 +8,7 @@
 #include <memory>
 #include <chrono>
 #include <string>
+#include <cstring>
 
 // Airport information structure
 struct AirportInfo {
@@ -18,8 +19,8 @@ struct AirportInfo {
     bool valid;        // Whether airport was detected
     
     AirportInfo() : lat(0.0f), lon(0.0f), valid(false) {
-        icao[0] = '\0';
-        name[0] = '\0';
+        memset(icao, 0, sizeof(icao));
+        memset(name, 0, sizeof(name));
     }
 };
 
