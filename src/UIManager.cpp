@@ -18,6 +18,13 @@ static void StatusWindowKey(XPLMWindowID inWindowID, char key, XPLMKeyFlags flag
 static XPLMCursorStatus StatusWindowCursor(XPLMWindowID inWindowID, int x, int y, void* inRefcon);
 static int StatusWindowWheel(XPLMWindowID inWindowID, int x, int y, int wheel, int clicks, void* inRefcon);
 
+// Forward declarations for settings window callbacks
+static void SettingsWindowDraw(XPLMWindowID inWindowID, void* inRefcon);
+static int SettingsWindowClick(XPLMWindowID inWindowID, int x, int y, XPLMMouseStatus status, void* inRefcon);
+static void SettingsWindowKey(XPLMWindowID inWindowID, char key, XPLMKeyFlags flags, char vkey, void* inRefcon, int losingFocus);
+static XPLMCursorStatus SettingsWindowCursor(XPLMWindowID inWindowID, int x, int y, void* inRefcon);
+static int SettingsWindowWheel(XPLMWindowID inWindowID, int x, int y, int wheel, int clicks, void* inRefcon);
+
 UIManager& UIManager::Instance() {
     static UIManager instance;
     return instance;
@@ -28,10 +35,14 @@ UIManager::UIManager()
     , m_menuItem_AutoMode(-1)
     , m_menuItem_StartStop(-1)
     , m_menuItem_ShowStatus(-1)
+    , m_menuItem_Settings(-1)
     , m_showStatusWindow(false)
-    , m_notificationTime(0.0f)
+    , m_showSettingsWindow(false)
     , m_imguiInitialized(false)
-    , m_imguiWindow(nullptr) {
+    , m_imguiWindow(nullptr)
+    , m_settingsWindow(nullptr)
+    , m_notificationMessage("")
+    , m_notificationTime(0.0f) {
 }
 
 void UIManager::Init() {
@@ -42,6 +53,11 @@ void UIManager::Init() {
 
 void UIManager::Cleanup() {
     CleanupImGui();
+    
+    if (m_settingsWindow) {
+        XPLMDestroyWindow(m_settingsWindow);
+        m_settingsWindow = nullptr;
+    }
     
     if (m_menuID) {
         XPLMDestroyMenu(m_menuID);
@@ -124,6 +140,10 @@ void UIManager::CreateMenu() {
     m_menuItem_ShowStatus = XPLMAppendMenuItem(m_menuID, "Show Status", 
                                                 reinterpret_cast<void*>(2), 0);
     
+    // Settings
+    m_menuItem_Settings = XPLMAppendMenuItem(m_menuID, "Settings...", 
+                                              reinterpret_cast<void*>(4), 0);
+    
     // Open output folder
     XPLMAppendMenuItem(m_menuID, "Open Output Folder", 
                        reinterpret_cast<void*>(3), 0);
@@ -180,6 +200,10 @@ void UIManager::MenuCallback_AutoMode(void* menuRef, void* itemRef) {
     // Open folder
     else if (item == 3) {
         UIManager::Instance().OpenOutputFolder();
+    }
+    // Settings
+    else if (item == 4) {
+        UIManager::Instance().ToggleSettingsWindow();
     }
 }
 
@@ -305,6 +329,10 @@ void UIManager::CleanupImGui() {
     if (m_imguiWindow) {
         XPLMDestroyWindow(m_imguiWindow);
         m_imguiWindow = nullptr;
+    }
+    if (m_settingsWindow) {
+        XPLMDestroyWindow(m_settingsWindow);
+        m_settingsWindow = nullptr;
     }
     m_imguiInitialized = false;
 }
@@ -480,6 +508,214 @@ static XPLMCursorStatus StatusWindowCursor(XPLMWindowID inWindowID, int x, int y
 }
 
 static int StatusWindowWheel(XPLMWindowID inWindowID, int x, int y, int wheel, int clicks, void* inRefcon) {
+    (void)inWindowID;
+    (void)x;
+    (void)y;
+    (void)wheel;
+    (void)clicks;
+    (void)inRefcon;
+    return 1;  // Consume the wheel event
+}
+
+// Settings window implementation
+void UIManager::CreateSettingsWindow() {
+    if (m_settingsWindow) {
+        // Window already exists, just show it
+        XPLMSetWindowIsVisible(m_settingsWindow, 1);
+        return;
+    }
+    
+    // Get screen bounds
+    int screenLeft, screenTop, screenRight, screenBottom;
+    XPLMGetScreenBoundsGlobal(&screenLeft, &screenTop, &screenRight, &screenBottom);
+    
+    // Create a window in the center of the screen
+    int winWidth = 450;
+    int winHeight = 400;
+    int left = screenLeft + (screenRight - screenLeft - winWidth) / 2;
+    int top = screenTop - 100;
+    int right = left + winWidth;
+    int bottom = top - winHeight;
+    
+    // Create window parameters
+    XPLMCreateWindow_t params;
+    memset(&params, 0, sizeof(params));
+    params.structSize = sizeof(params);
+    params.left = left;
+    params.top = top;
+    params.right = right;
+    params.bottom = bottom;
+    params.visible = 1;
+    params.drawWindowFunc = SettingsWindowDraw;
+    params.handleMouseClickFunc = SettingsWindowClick;
+    params.handleKeyFunc = SettingsWindowKey;
+    params.handleCursorFunc = SettingsWindowCursor;
+    params.handleMouseWheelFunc = SettingsWindowWheel;
+    params.refcon = this;
+    params.decorateAsFloatingWindow = xplm_WindowDecorationRoundRectangle;
+    params.layer = xplm_WindowLayerFloatingWindows;
+    params.handleRightClickFunc = SettingsWindowClick;
+    
+    m_settingsWindow = XPLMCreateWindowEx(&params);
+    
+    if (m_settingsWindow) {
+        XPLMSetWindowTitle(m_settingsWindow, "XBlackBox Settings");
+        XPLMSetWindowResizingLimits(m_settingsWindow, 400, 350, 600, 600);
+    }
+}
+
+void UIManager::ToggleSettingsWindow() {
+    m_showSettingsWindow = !m_showSettingsWindow;
+    
+    if (m_showSettingsWindow) {
+        CreateSettingsWindow();
+    } else if (m_settingsWindow) {
+        XPLMSetWindowIsVisible(m_settingsWindow, 0);
+    }
+}
+
+void UIManager::DrawSettingsWindow() {
+    // This is called from the native window draw callback
+}
+
+// Settings window draw callback
+static void SettingsWindowDraw(XPLMWindowID inWindowID, void* inRefcon) {
+    (void)inRefcon;
+    
+    // Get window geometry
+    int left, top, right, bottom;
+    XPLMGetWindowGeometry(inWindowID, &left, &top, &right, &bottom);
+    
+    // Set up drawing colors
+    float white[] = {1.0f, 1.0f, 1.0f};
+    float green[] = {0.0f, 1.0f, 0.0f};
+    float yellow[] = {1.0f, 1.0f, 0.3f};
+    float gray[] = {0.7f, 0.7f, 0.7f};
+    
+    int x = left + 10;
+    int y = top - 25;
+    int lineHeight = 20;
+    
+    // Title
+    XPLMDrawString(white, x, y, (char*)"=== XBlackBox Settings ===", nullptr, xplmFont_Proportional);
+    y -= lineHeight + 10;
+    
+    // Recording Level
+    XPLMDrawString(yellow, x, y, (char*)"Recording Level:", nullptr, xplmFont_Proportional);
+    y -= lineHeight;
+    XPLMDrawString(gray, x + 10, y, (char*)"Use menu to change", nullptr, xplmFont_Proportional);
+    y -= lineHeight - 5;
+    
+    char buffer[256];
+    snprintf(buffer, sizeof(buffer), "  Current: %s", Settings::Instance().GetRecordingLevelName().c_str());
+    XPLMDrawString(green, x + 10, y, buffer, nullptr, xplmFont_Proportional);
+    y -= lineHeight + 5;
+    
+    // Recording Interval
+    XPLMDrawString(yellow, x, y, (char*)"Recording Interval:", nullptr, xplmFont_Proportional);
+    y -= lineHeight;
+    XPLMDrawString(gray, x + 10, y, (char*)"Use menu to change", nullptr, xplmFont_Proportional);
+    y -= lineHeight - 5;
+    
+    float hz = 1.0f / Settings::Instance().GetRecordingInterval();
+    snprintf(buffer, sizeof(buffer), "  Current: %.0f Hz (%.2f sec)", hz, Settings::Instance().GetRecordingInterval());
+    XPLMDrawString(green, x + 10, y, buffer, nullptr, xplmFont_Proportional);
+    y -= lineHeight + 10;
+    
+    // Auto Mode
+    XPLMDrawString(yellow, x, y, (char*)"Auto Recording Mode:", nullptr, xplmFont_Proportional);
+    y -= lineHeight;
+    
+    bool autoMode = Settings::Instance().GetAutoMode();
+    snprintf(buffer, sizeof(buffer), "  Auto Mode: %s", autoMode ? "ON" : "OFF");
+    XPLMDrawString(autoMode ? green : white, x + 10, y, buffer, nullptr, xplmFont_Proportional);
+    y -= lineHeight;
+    
+    if (autoMode) {
+        // Auto Start Condition
+        AutoCondition startCond = Settings::Instance().GetAutoStartCondition();
+        const char* startCondName = "Ground Speed";
+        if (startCond == AutoCondition::EngineRunning) startCondName = "Engine Running";
+        else if (startCond == AutoCondition::WeightOnWheels) startCondName = "Weight on Wheels";
+        
+        float startThreshold = Settings::Instance().GetAutoStartThreshold();
+        snprintf(buffer, sizeof(buffer), "  Start: %s > %.1f", startCondName, startThreshold);
+        XPLMDrawString(white, x + 10, y, buffer, nullptr, xplmFont_Proportional);
+        y -= lineHeight;
+        
+        // Auto Stop Condition
+        AutoCondition stopCond = Settings::Instance().GetAutoStopCondition();
+        const char* stopCondName = "Ground Speed";
+        if (stopCond == AutoCondition::EngineRunning) stopCondName = "Engine Running";
+        else if (stopCond == AutoCondition::WeightOnWheels) stopCondName = "Weight on Wheels";
+        
+        float stopThreshold = Settings::Instance().GetAutoStopThreshold();
+        float stopDelay = Settings::Instance().GetAutoStopDelay();
+        snprintf(buffer, sizeof(buffer), "  Stop: %s < %.1f (delay: %.0fs)", stopCondName, stopThreshold, stopDelay);
+        XPLMDrawString(white, x + 10, y, buffer, nullptr, xplmFont_Proportional);
+        y -= lineHeight;
+    }
+    
+    y -= 10;
+    
+    // Instructions
+    XPLMDrawString(gray, x, y, (char*)"Use the menu to adjust settings.", nullptr, xplmFont_Proportional);
+    y -= lineHeight;
+    XPLMDrawString(gray, x, y, (char*)"Changes are saved automatically.", nullptr, xplmFont_Proportional);
+    y -= lineHeight + 10;
+    
+    // Output Directory
+    XPLMDrawString(yellow, x, y, (char*)"Output Directory:", nullptr, xplmFont_Proportional);
+    y -= lineHeight;
+    
+    std::string outDir = Settings::Instance().GetOutputDirectory();
+    if (outDir.length() > 50) {
+        outDir = "..." + outDir.substr(outDir.length() - 47);
+    }
+    snprintf(buffer, sizeof(buffer), "  %s", outDir.c_str());
+    XPLMDrawString(white, x + 5, y, buffer, nullptr, xplmFont_Proportional);
+    y -= lineHeight + 5;
+    
+    // File prefix
+    XPLMDrawString(yellow, x, y, (char*)"File Prefix:", nullptr, xplmFont_Proportional);
+    y -= lineHeight;
+    snprintf(buffer, sizeof(buffer), "  %s", Settings::Instance().GetFilePrefix().c_str());
+    XPLMDrawString(white, x + 5, y, buffer, nullptr, xplmFont_Proportional);
+    
+    // Note at bottom
+    y = bottom + 30;
+    XPLMDrawString(gray, x, y, (char*)"Note: This window shows current settings.", nullptr, xplmFont_Proportional);
+    y -= lineHeight - 5;
+    XPLMDrawString(gray, x, y, (char*)"Use the XBlackBox menu to modify them.", nullptr, xplmFont_Proportional);
+}
+
+static int SettingsWindowClick(XPLMWindowID inWindowID, int x, int y, XPLMMouseStatus status, void* inRefcon) {
+    (void)inWindowID;
+    (void)x;
+    (void)y;
+    (void)status;
+    (void)inRefcon;
+    return 1;  // Consume the click
+}
+
+static void SettingsWindowKey(XPLMWindowID inWindowID, char key, XPLMKeyFlags flags, char vkey, void* inRefcon, int losingFocus) {
+    (void)inWindowID;
+    (void)key;
+    (void)flags;
+    (void)vkey;
+    (void)inRefcon;
+    (void)losingFocus;
+}
+
+static XPLMCursorStatus SettingsWindowCursor(XPLMWindowID inWindowID, int x, int y, void* inRefcon) {
+    (void)inWindowID;
+    (void)x;
+    (void)y;
+    (void)inRefcon;
+    return xplm_CursorDefault;
+}
+
+static int SettingsWindowWheel(XPLMWindowID inWindowID, int x, int y, int wheel, int clicks, void* inRefcon) {
     (void)inWindowID;
     (void)x;
     (void)y;
