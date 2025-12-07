@@ -269,10 +269,13 @@ void DatarefManager::LoadDetailedDatarefs() {
     // GPS navigation indicators
     AddDataref("sim/cockpit2/radios/indicators/gps_dme_distance_nm", "GPS DME distance", DatarefType::Float);
     AddDataref("sim/cockpit2/radios/indicators/gps_hdef_dots_pilot", "GPS HDEF dots pilot", DatarefType::Float);
+    AddDataref("sim/cockpit2/radios/actuators/gps_course_degtm", "GPS course", DatarefType::Float);
+    AddDataref("sim/cockpit2/radios/indicators/gps_vdef_dots_pilot", "GPS VDEF dots pilot", DatarefType::Float);
     
     // Weight and CG information
     AddDataref("sim/flightmodel/weight/m_fixed", "Payload weight", DatarefType::Float);
     AddDataref("sim/flightmodel/weight/m_jettison", "Jettisoned weight", DatarefType::Float);
+    AddDataref("sim/flightmodel/misc/cgz_ref_to_default", "CG position longitudinal", DatarefType::Float);
     
     // Performance metrics
     AddDataref("sim/flightmodel/position/local_vx", "Local velocity X", DatarefType::Float);
@@ -295,16 +298,9 @@ void DatarefManager::LoadDetailedDatarefs() {
     AddDataref("sim/cockpit2/pressurization/actuators/safety_valve", "Safety valve position", DatarefType::Float);
     AddDataref("sim/cockpit2/pressurization/actuators/dump_all", "Dump all valve", DatarefType::Float);
     
-    // Additional engine parameters  
+    // Additional engine parameters
     AddDataref("sim/flightmodel2/engines/fuel_flow_kg_sec", "Fuel flow kg/sec", DatarefType::Float, MAX_ENGINES);
     AddDataref("sim/flightmodel2/engines/nacelle_temp_c", "Nacelle temperature", DatarefType::Float, MAX_ENGINES);
-    
-    // Additional GPS indicators
-    AddDataref("sim/cockpit2/radios/actuators/gps_course_degtm", "GPS course", DatarefType::Float);
-    AddDataref("sim/cockpit2/radios/indicators/gps_vdef_dots_pilot", "GPS VDEF dots pilot", DatarefType::Float);
-    
-    // CG information
-    AddDataref("sim/flightmodel/misc/cgz_ref_to_default", "CG position longitudinal", DatarefType::Float);
 }
 
 void DatarefManager::ReadCurrentValues() {
