@@ -15,6 +15,11 @@ static float FlightLoopCallback(float elapsedMe, float elapsedSim, int counter, 
 
 // Plugin entry points
 PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc) {
+    // Validate output parameters
+    if (!outName || !outSig || !outDesc) {
+        return 0;  // Failed initialization
+    }
+    
     // Set plugin information
     strcpy(outName, PLUGIN_NAME);
     strcpy(outSig, PLUGIN_SIG);
@@ -22,17 +27,37 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc) {
     
     LogInfo("Plugin starting...");
     
-    // Initialize settings
-    Settings::Instance().Init();
+    // Initialize settings first (other components may depend on it)
+    try {
+        Settings::Instance().Init();
+    } catch (const std::exception& e) {
+        LogError(std::string("Failed to initialize settings: ") + e.what());
+        return 0;
+    }
     
     // Initialize dataref manager
-    DatarefManager::Instance().Init();
+    try {
+        DatarefManager::Instance().Init();
+    } catch (const std::exception& e) {
+        LogError(std::string("Failed to initialize dataref manager: ") + e.what());
+        return 0;
+    }
     
     // Initialize recorder
-    Recorder::Instance().Init();
+    try {
+        Recorder::Instance().Init();
+    } catch (const std::exception& e) {
+        LogError(std::string("Failed to initialize recorder: ") + e.what());
+        return 0;
+    }
     
     // Initialize UI
-    UIManager::Instance().Init();
+    try {
+        UIManager::Instance().Init();
+    } catch (const std::exception& e) {
+        LogError(std::string("Failed to initialize UI: ") + e.what());
+        // UI failure is not critical, continue without UI
+    }
     
     LogInfo("Plugin started successfully");
     
@@ -42,16 +67,28 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc) {
 PLUGIN_API void XPluginStop(void) {
     LogInfo("Plugin stopping...");
     
-    // Stop recording if active
-    if (Recorder::Instance().IsRecording()) {
-        Recorder::Instance().Stop();
+    // Stop recording if active (with error handling)
+    try {
+        if (Recorder::Instance().IsRecording()) {
+            Recorder::Instance().Stop();
+        }
+    } catch (const std::exception& e) {
+        LogError(std::string("Exception stopping recording: ") + e.what());
     }
     
-    // Save settings
-    Settings::Instance().Save();
+    // Save settings (with error handling)
+    try {
+        Settings::Instance().Save();
+    } catch (const std::exception& e) {
+        LogError(std::string("Exception saving settings: ") + e.what());
+    }
     
-    // Cleanup UI
-    UIManager::Instance().Cleanup();
+    // Cleanup UI (with error handling)
+    try {
+        UIManager::Instance().Cleanup();
+    } catch (const std::exception& e) {
+        LogError(std::string("Exception cleaning up UI: ") + e.what());
+    }
     
     LogInfo("Plugin stopped");
 }
@@ -59,16 +96,24 @@ PLUGIN_API void XPluginStop(void) {
 PLUGIN_API int XPluginEnable(void) {
     LogInfo("Plugin enabled");
     
-    // Register flight loop callback
-    XPLMCreateFlightLoop_t flightLoopParams;
-    flightLoopParams.structSize = sizeof(XPLMCreateFlightLoop_t);
-    flightLoopParams.phase = xplm_FlightLoop_Phase_AfterFlightModel;
-    flightLoopParams.callbackFunc = FlightLoopCallback;
-    flightLoopParams.refcon = nullptr;
-    
-    XPLMFlightLoopID flightLoopID = XPLMCreateFlightLoop(&flightLoopParams);
-    if (flightLoopID) {
-        XPLMScheduleFlightLoop(flightLoopID, -1.0f, 1);  // Call every frame
+    // Register flight loop callback with error handling
+    try {
+        XPLMCreateFlightLoop_t flightLoopParams;
+        flightLoopParams.structSize = sizeof(XPLMCreateFlightLoop_t);
+        flightLoopParams.phase = xplm_FlightLoop_Phase_AfterFlightModel;
+        flightLoopParams.callbackFunc = FlightLoopCallback;
+        flightLoopParams.refcon = nullptr;
+        
+        XPLMFlightLoopID flightLoopID = XPLMCreateFlightLoop(&flightLoopParams);
+        if (flightLoopID) {
+            XPLMScheduleFlightLoop(flightLoopID, -1.0f, 1);  // Call every frame
+        } else {
+            LogError("Failed to create flight loop");
+            return 0;
+        }
+    } catch (const std::exception& e) {
+        LogError(std::string("Exception enabling plugin: ") + e.what());
+        return 0;
     }
     
     return 1;
@@ -77,9 +122,13 @@ PLUGIN_API int XPluginEnable(void) {
 PLUGIN_API void XPluginDisable(void) {
     LogInfo("Plugin disabled");
     
-    // Stop recording if active
-    if (Recorder::Instance().IsRecording()) {
-        Recorder::Instance().Stop();
+    // Stop recording if active (with error handling)
+    try {
+        if (Recorder::Instance().IsRecording()) {
+            Recorder::Instance().Stop();
+        }
+    } catch (const std::exception& e) {
+        LogError(std::string("Exception stopping recording during disable: ") + e.what());
     }
 }
 
@@ -92,16 +141,22 @@ PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFrom, int inMsg, void* inPa
 }
 
 // Flight loop callback - called every frame
+// This is a performance-critical function, keep it lightweight
 static float FlightLoopCallback(float elapsedMe, float elapsedSim, int counter, void* refcon) {
     (void)elapsedMe;  // Unused
     (void)counter;    // Unused
     (void)refcon;     // Unused
     
-    // Update recorder
-    Recorder::Instance().Update(elapsedSim);
-    
-    // Update UI (ImGui rendering is handled via XPLMRegisterDrawCallback)
-    UIManager::Instance().Update();
+    try {
+        // Update recorder (handles auto-recording and data writing)
+        Recorder::Instance().Update(elapsedSim);
+        
+        // Update UI (handles notification timers, etc.)
+        UIManager::Instance().Update();
+    } catch (const std::exception& e) {
+        // Log but don't crash - this is called every frame
+        LogError(std::string("Exception in flight loop: ") + e.what());
+    }
     
     // Return -1 to be called every frame
     return -1.0f;

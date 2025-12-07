@@ -80,32 +80,78 @@ void Settings::Load() {
             value = value.substr(1, value.size() - 2);
         }
         
-        // Apply settings
-        if (key == "recordingLevel") {
-            int level = std::stoi(value);
-            if (level >= 1 && level <= 3) {
-                m_recordingLevel = static_cast<RecordingLevel>(level);
+        // Apply settings with error handling
+        try {
+            if (key == "recordingLevel") {
+                int level = std::stoi(value);
+                if (level >= 1 && level <= 3) {
+                    m_recordingLevel = static_cast<RecordingLevel>(level);
+                } else {
+                    LogError("Invalid recording level: " + value);
+                }
+            } else if (key == "recordingInterval") {
+                float interval = std::stof(value);
+                if (interval >= 0.05f && interval <= 5.0f) {
+                    m_recordingInterval = interval;
+                } else {
+                    LogError("Invalid recording interval: " + value);
+                }
+            } else if (key == "autoMode") {
+                m_autoMode = (value == "true" || value == "1");
+            } else if (key == "autoStartCondition") {
+                if (value == "ground_speed") {
+                    m_autoStartCondition = AutoCondition::GroundSpeed;
+                } else if (value == "engine_running") {
+                    m_autoStartCondition = AutoCondition::EngineRunning;
+                } else if (value == "weight_on_wheels") {
+                    m_autoStartCondition = AutoCondition::WeightOnWheels;
+                } else {
+                    LogError("Invalid auto start condition: " + value);
+                }
+            } else if (key == "autoStartThreshold") {
+                float threshold = std::stof(value);
+                if (threshold >= 0.0f) {
+                    m_autoStartThreshold = threshold;
+                } else {
+                    LogError("Invalid auto start threshold: " + value);
+                }
+            } else if (key == "autoStopCondition") {
+                if (value == "ground_speed") {
+                    m_autoStopCondition = AutoCondition::GroundSpeed;
+                } else if (value == "engine_running") {
+                    m_autoStopCondition = AutoCondition::EngineRunning;
+                } else if (value == "weight_on_wheels") {
+                    m_autoStopCondition = AutoCondition::WeightOnWheels;
+                } else {
+                    LogError("Invalid auto stop condition: " + value);
+                }
+            } else if (key == "autoStopThreshold") {
+                float threshold = std::stof(value);
+                if (threshold >= 0.0f) {
+                    m_autoStopThreshold = threshold;
+                } else {
+                    LogError("Invalid auto stop threshold: " + value);
+                }
+            } else if (key == "autoStopDelay") {
+                float delay = std::stof(value);
+                if (delay >= 0.0f) {
+                    m_autoStopDelay = delay;
+                } else {
+                    LogError("Invalid auto stop delay: " + value);
+                }
+            } else if (key == "filePrefix") {
+                if (!value.empty()) {
+                    m_filePrefix = value;
+                } else {
+                    LogError("Invalid file prefix: empty");
+                }
             }
-        } else if (key == "recordingInterval") {
-            m_recordingInterval = std::stof(value);
-        } else if (key == "autoMode") {
-            m_autoMode = (value == "true" || value == "1");
-        } else if (key == "autoStartCondition") {
-            if (value == "ground_speed") m_autoStartCondition = AutoCondition::GroundSpeed;
-            else if (value == "engine_running") m_autoStartCondition = AutoCondition::EngineRunning;
-            else if (value == "weight_on_wheels") m_autoStartCondition = AutoCondition::WeightOnWheels;
-        } else if (key == "autoStartThreshold") {
-            m_autoStartThreshold = std::stof(value);
-        } else if (key == "autoStopCondition") {
-            if (value == "ground_speed") m_autoStopCondition = AutoCondition::GroundSpeed;
-            else if (value == "engine_running") m_autoStopCondition = AutoCondition::EngineRunning;
-            else if (value == "weight_on_wheels") m_autoStopCondition = AutoCondition::WeightOnWheels;
-        } else if (key == "autoStopThreshold") {
-            m_autoStopThreshold = std::stof(value);
-        } else if (key == "autoStopDelay") {
-            m_autoStopDelay = std::stof(value);
-        } else if (key == "filePrefix") {
-            m_filePrefix = value;
+        } catch (const std::invalid_argument& e) {
+            LogError(std::string("Invalid argument parsing setting ") + key + ": " + e.what());
+        } catch (const std::out_of_range& e) {
+            LogError(std::string("Out of range parsing setting ") + key + ": " + e.what());
+        } catch (const std::exception& e) {
+            LogError(std::string("Exception parsing setting ") + key + ": " + e.what());
         }
     }
     
@@ -120,22 +166,32 @@ void Settings::Save() {
         return;
     }
     
-    file << "# XBlackBox Configuration File\n";
-    file << "# Recording Settings\n";
-    file << "recordingLevel=" << static_cast<int>(m_recordingLevel) << "\n";
-    file << "recordingInterval=" << m_recordingInterval << "\n";
-    file << "\n# Auto Recording Mode\n";
-    file << "autoMode=" << (m_autoMode ? "true" : "false") << "\n";
-    file << "autoStartCondition=" << GetAutoConditionName(m_autoStartCondition) << "\n";
-    file << "autoStartThreshold=" << m_autoStartThreshold << "\n";
-    file << "autoStopCondition=" << GetAutoConditionName(m_autoStopCondition) << "\n";
-    file << "autoStopThreshold=" << m_autoStopThreshold << "\n";
-    file << "autoStopDelay=" << m_autoStopDelay << "\n";
-    file << "\n# File Settings\n";
-    file << "filePrefix=\"" << m_filePrefix << "\"\n";
-    
-    file.close();
-    LogInfo("Settings saved to " + m_configPath);
+    try {
+        file << "# XBlackBox Configuration File\n";
+        file << "# Recording Settings\n";
+        file << "recordingLevel=" << static_cast<int>(m_recordingLevel) << "\n";
+        file << "recordingInterval=" << m_recordingInterval << "\n";
+        file << "\n# Auto Recording Mode\n";
+        file << "autoMode=" << (m_autoMode ? "true" : "false") << "\n";
+        file << "autoStartCondition=" << GetAutoConditionName(m_autoStartCondition) << "\n";
+        file << "autoStartThreshold=" << m_autoStartThreshold << "\n";
+        file << "autoStopCondition=" << GetAutoConditionName(m_autoStopCondition) << "\n";
+        file << "autoStopThreshold=" << m_autoStopThreshold << "\n";
+        file << "autoStopDelay=" << m_autoStopDelay << "\n";
+        file << "\n# File Settings\n";
+        file << "filePrefix=\"" << m_filePrefix << "\"\n";
+        
+        // Check if write was successful
+        if (!file.good()) {
+            LogError("Error writing settings to file");
+        }
+        
+        file.close();
+        LogInfo("Settings saved to " + m_configPath);
+    } catch (const std::exception& e) {
+        LogError(std::string("Exception saving settings: ") + e.what());
+        file.close();
+    }
 }
 
 std::string Settings::GetRecordingLevelName() const {

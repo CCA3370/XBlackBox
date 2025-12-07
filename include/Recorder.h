@@ -6,6 +6,7 @@
 #include <fstream>
 #include <vector>
 #include <memory>
+#include <chrono>
 
 class Recorder {
 public:
@@ -28,6 +29,10 @@ public:
     size_t GetBytesWritten() const { return m_bytesWritten; }
     int GetDuration() const;
     std::string GetCurrentFilePath() const { return m_currentFilePath; }
+    
+    // Performance statistics
+    double GetAverageRecordTime() const { return m_averageRecordTime; }
+    double GetMaxRecordTime() const { return m_maxRecordTime; }
     
 private:
     Recorder();
@@ -68,8 +73,15 @@ private:
     int m_recordCount;
     size_t m_bytesWritten;
     
+    // Performance tracking
+    double m_averageRecordTime;
+    double m_maxRecordTime;
+    double m_totalRecordTime;
+    int m_perfSampleCount;
+    
     // Write buffer for efficiency
     std::vector<uint8_t> m_writeBuffer;
     static constexpr size_t BUFFER_SIZE = 65536;  // 64KB buffer
     static constexpr int FLUSH_INTERVAL = 10;  // Flush every N records
+    static constexpr int PERF_LOG_INTERVAL = 1000;  // Log performance every N records
 };
