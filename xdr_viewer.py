@@ -19,6 +19,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+from functools import partial
+
 import numpy as np
 
 from PySide6.QtWidgets import (
@@ -397,7 +399,11 @@ class XDRData:
     
     def get_parameter_derivative(self, dataref_index: int, array_index: int = 0,
                                  time_range: Optional[tuple] = None) -> tuple:
-        """Calculate derivative (rate of change) of a parameter"""
+        """Calculate derivative (rate of change) of a parameter
+        
+        Returns:
+            tuple[List[float], List[float]]: (timestamps, derivative_values)
+        """
         timestamps, values = self.get_parameter_data(
             dataref_index, array_index, time_range, downsample_factor=1
         )
@@ -453,6 +459,9 @@ class XDRData:
 class PlotCanvas(FigureCanvas):
     """Matplotlib canvas for plotting"""
     
+    # Maximum number of points to plot before downsampling
+    MAX_PLOT_POINTS = 5000
+    
     def __init__(self, parent=None):
         self.fig = Figure(figsize=(10, 6), dpi=100)
         self.fig.set_facecolor('#2b2b2b')
@@ -495,7 +504,7 @@ class PlotCanvas(FigureCanvas):
         
         # Calculate downsampling factor based on data size
         total_frames = len(data.frames)
-        downsample_factor = max(1, total_frames // 5000)  # Max 5000 points per plot
+        downsample_factor = max(1, total_frames // self.MAX_PLOT_POINTS)
         
         if separate_axes:
             # Each parameter on its own axis
@@ -1455,7 +1464,7 @@ class MainWindow(QMainWindow):
             if Path(filepath).exists():
                 action = QAction(Path(filepath).name, self)
                 action.setToolTip(filepath)
-                action.triggered.connect(lambda checked, f=filepath: self.load_file(f))
+                action.triggered.connect(partial(self.load_file, filepath))
                 self.recent_files_menu.addAction(action)
     
     def on_time_range_changed(self):
