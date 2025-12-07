@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
     QToolBar, QStyle, QSizePolicy
 )
-from PySide6.QtCore import Qt, Signal, QThread
+from PySide6.QtCore import Qt, Signal, QThread, QTimer
 from PySide6.QtGui import QAction, QFont, QColor, QIcon
 
 import matplotlib
@@ -38,12 +38,18 @@ class XDRData:
         self.header = {}
         self.datarefs = []
         self.frames = []
+        self._data_start_pos = 0  # Position where frame data starts
+        self._last_read_pos = 0   # Last read position for incremental reading
+        self._is_complete = False # Whether file has ENDR marker
         
     def clear(self):
         self.filepath = ""
         self.header = {}
         self.datarefs = []
         self.frames = []
+        self._data_start_pos = 0
+        self._last_read_pos = 0
+        self._is_complete = False
         
     def read(self, filepath: str):
         """Read the entire XDR file"""
@@ -53,8 +59,144 @@ class XDRData:
         with open(filepath, 'rb') as f:
             self._read_header(f)
             self._read_dataref_definitions(f)
+            self._data_start_pos = f.tell()  # Save position where frames start
             self._read_frames(f)
-            self._read_footer(f)
+            self._try_read_footer(f)
+            self._last_read_pos = f.tell()
+            
+    def read_new_frames(self) -> int:
+        """Read any new frames added since last read. Returns number of new frames."""
+        if not self.filepath or not self.datarefs:
+            return 0
+            
+        new_frame_count = 0
+        try:
+            with open(self.filepath, 'rb') as f:
+                f.seek(self._last_read_pos)
+                
+                while True:
+                    marker = f.read(4)
+                    if len(marker) < 4:
+                        # Not enough data yet
+                        break
+                    if marker == b'ENDR':
+                        # End of recording
+                        self._is_complete = True
+                        self._read_footer_data(f)
+                        self._last_read_pos = f.tell()
+                        break
+                    if marker != b'DATA':
+                        # Unknown marker or incomplete data, back up
+                        break
+                        
+                    # Try to read the frame
+                    timestamp_data = f.read(4)
+                    if len(timestamp_data) < 4:
+                        # Incomplete frame
+                        break
+                        
+                    timestamp = struct.unpack('<f', timestamp_data)[0]
+                    
+                    # Calculate expected frame size
+                    frame_size = self._calc_frame_value_size()
+                    values_data = f.read(frame_size)
+                    if len(values_data) < frame_size:
+                        # Incomplete frame
+                        break
+                        
+                    # Parse values from buffer
+                    values = self._parse_frame_values(values_data)
+                    
+                    self.frames.append({
+                        'timestamp': timestamp,
+                        'values': values
+                    })
+                    new_frame_count += 1
+                    self._last_read_pos = f.tell()
+                    
+        except Exception:
+            pass
+            
+        return new_frame_count
+        
+    def _calc_frame_value_size(self) -> int:
+        """Calculate the byte size of one frame's values"""
+        size = 0
+        for dr in self.datarefs:
+            if dr['array_size'] > 0:
+                size += 4 * dr['array_size']  # float or int array
+            else:
+                if dr['type'] == 'float':
+                    size += 4
+                elif dr['type'] == 'int':
+                    size += 4
+                elif dr['type'] == 'string':
+                    size += 1  # Just the length byte minimum
+        return size
+        
+    def _parse_frame_values(self, data: bytes) -> List:
+        """Parse frame values from bytes buffer"""
+        values = []
+        pos = 0
+        for dr in self.datarefs:
+            if dr['array_size'] > 0:
+                arr = []
+                for _ in range(dr['array_size']):
+                    if dr['type'] == 'float':
+                        arr.append(struct.unpack('<f', data[pos:pos+4])[0])
+                        pos += 4
+                    elif dr['type'] == 'int':
+                        arr.append(struct.unpack('<i', data[pos:pos+4])[0])
+                        pos += 4
+                values.append(arr)
+            else:
+                if dr['type'] == 'float':
+                    values.append(struct.unpack('<f', data[pos:pos+4])[0])
+                    pos += 4
+                elif dr['type'] == 'int':
+                    values.append(struct.unpack('<i', data[pos:pos+4])[0])
+                    pos += 4
+                elif dr['type'] == 'string':
+                    str_len = data[pos]
+                    pos += 1
+                    if str_len > 0:
+                        values.append(data[pos:pos+str_len].decode('utf-8'))
+                        pos += str_len
+                    else:
+                        values.append('')
+        return values
+        
+    def _try_read_footer(self, f):
+        """Try to read file footer (may not exist if recording is in progress)"""
+        try:
+            marker = f.read(4)
+            if marker == b'ENDR':
+                self._is_complete = True
+                self._read_footer_data(f)
+            else:
+                # No footer yet, file is being written
+                self._is_complete = False
+                if len(marker) == 4:
+                    f.seek(-4, 1)  # Go back
+        except:
+            self._is_complete = False
+            
+    def _read_footer_data(self, f):
+        """Read footer data after ENDR marker"""
+        try:
+            total_records = struct.unpack('<I', f.read(4))[0]
+            end_timestamp = struct.unpack('<Q', f.read(8))[0]
+            
+            self.header['total_records'] = total_records
+            self.header['end_timestamp'] = end_timestamp
+            self.header['end_datetime'] = datetime.fromtimestamp(end_timestamp)
+            self.header['duration'] = end_timestamp - self.header['start_timestamp']
+        except:
+            pass
+        
+    def is_recording_complete(self) -> bool:
+        """Check if recording has finished (ENDR marker found)"""
+        return self._is_complete
             
     def _read_header(self, f):
         """Read file header"""
@@ -96,22 +238,41 @@ class XDRData:
             })
             
     def _read_frames(self, f):
-        """Read all data frames"""
+        """Read all data frames (handles incomplete files for live reading)"""
         while True:
             marker = f.read(4)
+            if len(marker) < 4:
+                # Incomplete data
+                break
             if marker == b'ENDR':
                 f.seek(-4, 1)
                 break
             if marker != b'DATA':
-                raise ValueError(f"Invalid frame marker: {marker}")
+                # Unknown marker, might be incomplete - stop reading
+                f.seek(-4, 1)
+                break
                 
-            timestamp = struct.unpack('<f', f.read(4))[0]
-            values = self._read_frame_values(f)
+            # Try to read timestamp
+            ts_data = f.read(4)
+            if len(ts_data) < 4:
+                f.seek(-4 - len(ts_data), 1)
+                break
+                
+            timestamp = struct.unpack('<f', ts_data)[0]
             
-            self.frames.append({
-                'timestamp': timestamp,
-                'values': values
-            })
+            # Try to read frame values
+            start_pos = f.tell()
+            try:
+                values = self._read_frame_values(f)
+                self.frames.append({
+                    'timestamp': timestamp,
+                    'values': values
+                })
+                self._last_read_pos = f.tell()
+            except:
+                # Incomplete frame, go back
+                f.seek(start_pos - 8, 0)  # Go back before DATA marker
+                break
             
     def _read_frame_values(self, f):
         """Read values for one frame"""
@@ -137,20 +298,6 @@ class XDRData:
                     else:
                         values.append('')
         return values
-        
-    def _read_footer(self, f):
-        """Read file footer"""
-        marker = f.read(4)
-        if marker != b'ENDR':
-            raise ValueError(f"Invalid footer marker: {marker}")
-            
-        total_records = struct.unpack('<I', f.read(4))[0]
-        end_timestamp = struct.unpack('<Q', f.read(8))[0]
-        
-        self.header['total_records'] = total_records
-        self.header['end_timestamp'] = end_timestamp
-        self.header['end_datetime'] = datetime.fromtimestamp(end_timestamp)
-        self.header['duration'] = end_timestamp - self.header['start_timestamp']
         
     def get_parameter_data(self, dataref_index: int, array_index: int = 0) -> tuple:
         """Get timestamps and values for a specific parameter"""
@@ -501,15 +648,40 @@ class FileInfoWidget(QWidget):
             return
             
         h = data.header
+        
+        # Status indicator
+        if data.is_recording_complete():
+            status = '<span style="color: #00ff00;">✓ Complete</span>'
+            end_time = str(h.get('end_datetime', 'Unknown'))
+            duration = f"{h.get('duration', 0)} seconds"
+            total_frames = h.get('total_records', len(data.frames))
+        else:
+            status = '<span style="color: #ff6600;">● Recording...</span>'
+            end_time = '<i>In progress</i>'
+            # Calculate approximate duration from frames
+            if data.frames:
+                approx_duration = data.frames[-1]['timestamp']
+                duration = f"~{approx_duration:.1f} sec (ongoing)"
+            else:
+                duration = "N/A"
+            total_frames = f"{len(data.frames)} (so far)"
+        
+        try:
+            file_size = Path(data.filepath).stat().st_size
+            file_size_str = f"{file_size:,} bytes"
+        except:
+            file_size_str = "N/A"
+        
         info = f"""<b>File:</b> {Path(data.filepath).name}<br>
+<b>Status:</b> {status}<br>
 <b>Recording Level:</b> {h.get('level_name', 'Unknown')} (Level {h.get('level', '?')})<br>
 <b>Recording Interval:</b> {h.get('interval', 0):.3f} sec ({1/h.get('interval', 1):.1f} Hz)<br>
 <b>Start Time:</b> {h.get('start_datetime', 'Unknown')}<br>
-<b>End Time:</b> {h.get('end_datetime', 'Unknown')}<br>
-<b>Duration:</b> {h.get('duration', 0)} seconds<br>
-<b>Total Frames:</b> {h.get('total_records', 0)}<br>
+<b>End Time:</b> {end_time}<br>
+<b>Duration:</b> {duration}<br>
+<b>Total Frames:</b> {total_frames}<br>
 <b>Parameters:</b> {h.get('dataref_count', 0)}<br>
-<b>File Size:</b> {Path(data.filepath).stat().st_size:,} bytes"""
+<b>File Size:</b> {file_size_str}"""
         
         self.info_label.setText(info)
 
@@ -604,6 +776,13 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.data = XDRData()
+        self.live_mode = False
+        
+        # Timer for live mode updates
+        self.live_timer = QTimer(self)
+        self.live_timer.setInterval(500)  # 500ms refresh interval
+        self.live_timer.timeout.connect(self.on_live_timer)
+        
         self.setup_ui()
         self.setup_menu()
         self.setup_toolbar()
@@ -656,6 +835,23 @@ class MainWindow(QMainWindow):
         self.cb_grid.setChecked(True)
         self.cb_grid.stateChanged.connect(self.update_plot)
         options_layout.addWidget(self.cb_grid)
+        
+        options_layout.addSpacing(20)
+        
+        # Live mode checkbox
+        self.cb_live_mode = QCheckBox("Live Mode (实时更新)")
+        self.cb_live_mode.setStyleSheet("QCheckBox { color: #00ff00; font-weight: bold; }")
+        self.cb_live_mode.stateChanged.connect(self.toggle_live_mode)
+        options_layout.addWidget(self.cb_live_mode)
+        
+        # Live mode interval selector
+        options_layout.addWidget(QLabel("Interval:"))
+        self.spin_live_interval = QSpinBox()
+        self.spin_live_interval.setRange(100, 5000)
+        self.spin_live_interval.setValue(500)
+        self.spin_live_interval.setSuffix(" ms")
+        self.spin_live_interval.valueChanged.connect(self.update_live_interval)
+        options_layout.addWidget(self.spin_live_interval)
         
         options_layout.addStretch()
         
@@ -788,6 +984,59 @@ class MainWindow(QMainWindow):
         )
         
         self.statusBar().showMessage(f"Plotting {len(selected)} parameter(s)")
+        
+    def toggle_live_mode(self, state):
+        """Toggle live mode on/off"""
+        self.live_mode = state == 2  # Qt.Checked is 2
+        
+        if self.live_mode:
+            if not self.data.filepath:
+                QMessageBox.warning(self, "Warning", "Please open an XDR file first.")
+                self.cb_live_mode.setChecked(False)
+                return
+            self.live_timer.start()
+            self.statusBar().showMessage(f"Live mode enabled - refreshing every {self.spin_live_interval.value()}ms")
+        else:
+            self.live_timer.stop()
+            self.statusBar().showMessage("Live mode disabled")
+            
+    def update_live_interval(self, value):
+        """Update live mode refresh interval"""
+        self.live_timer.setInterval(value)
+        if self.live_mode:
+            self.statusBar().showMessage(f"Live mode - refreshing every {value}ms")
+            
+    def on_live_timer(self):
+        """Called periodically in live mode to check for new data"""
+        if not self.data.filepath:
+            return
+            
+        # Read new frames
+        new_frames = self.data.read_new_frames()
+        
+        if new_frames > 0:
+            # Update info display
+            self.file_info.update_info(self.data)
+            
+            # Update table data range
+            if self.data.frames:
+                self.data_table.spin_start.setMaximum(len(self.data.frames) - 1)
+                self.data_table.spin_end.setMaximum(len(self.data.frames) - 1)
+            
+            # Update plot
+            self.update_plot()
+            
+            self.statusBar().showMessage(
+                f"Live: {len(self.data.frames)} frames (+{new_frames})"
+            )
+            
+        # Check if recording is complete
+        if self.data.is_recording_complete():
+            self.cb_live_mode.setChecked(False)
+            self.file_info.update_info(self.data)
+            self.statusBar().showMessage(
+                f"Recording complete - {len(self.data.frames)} frames total"
+            )
         
     def export_csv(self):
         """Export data to CSV"""
