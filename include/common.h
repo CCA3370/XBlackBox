@@ -1,5 +1,12 @@
 #pragma once
 
+// Prevent Windows.h from defining min/max macros that conflict with std::min/std::max
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
+
 #include <string>
 #include <vector>
 #include <memory>
