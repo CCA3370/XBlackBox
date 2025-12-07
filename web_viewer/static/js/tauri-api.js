@@ -27,9 +27,14 @@ const tauriApi = isTauri ? {
 // API Functions adapted for Tauri
 const api = {
     async uploadFile(file) {
-        // In Tauri, we use file paths instead of uploading
-        // This is not directly supported - we need to use file dialog
-        throw new Error('Direct file upload not supported in Tauri. Use the file dialog instead.');
+        // In Tauri, we use native file dialogs instead of file upload
+        // Guide users to use the "Open File" button which triggers the file dialog
+        if (isTauri) {
+            console.warn('File upload not supported in Tauri. Please use the "Open File" button to select a file.');
+            return { error: 'Please use the "Open File" button to select files' };
+        }
+        // Web mode fallback
+        throw new Error('File upload not implemented in web mode.');
     },
 
     async loadFile(path) {

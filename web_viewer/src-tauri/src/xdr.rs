@@ -343,8 +343,6 @@ impl XDRData {
             return (timestamps, values);
         }
 
-        let _dr = &self.datarefs[dataref_index];
-
         for (i, frame) in self.frames.iter().enumerate() {
             if i % downsample_factor != 0 {
                 continue;

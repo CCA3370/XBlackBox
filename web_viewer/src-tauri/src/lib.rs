@@ -11,11 +11,6 @@ struct AppState {
 }
 
 // Request/Response types
-#[derive(Debug, Deserialize)]
-struct LoadFileRequest {
-    filepath: String,
-}
-
 #[derive(Debug, Serialize)]
 struct LoadFileResponse {
     success: bool,
@@ -217,8 +212,13 @@ async fn get_fft(
         });
     }
 
-    // Simple FFT placeholder - in a real app, you'd use a proper FFT library
-    // For now, return empty arrays to match the interface
+    // NOTE: FFT implementation not included in initial version
+    // To add FFT support, include the rustfft crate and implement:
+    // 1. De-mean the data
+    // 2. Apply window function (Hanning)
+    // 3. Compute FFT
+    // 4. Calculate magnitude spectrum
+    // For now, return empty arrays to maintain API compatibility
     Ok(FftResponse {
         frequencies: vec![],
         magnitudes: vec![],
@@ -337,13 +337,6 @@ async fn get_table_data(
     })
 }
 
-#[tauri::command]
-async fn open_file_dialog() -> Result<Option<String>, String> {
-    // Placeholder for file dialog - actual implementation would use tauri-plugin-dialog
-    // This is called from frontend using Tauri's dialog API directly
-    Ok(None)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -370,7 +363,6 @@ pub fn run() {
             get_correlation,
             get_flight_path,
             get_table_data,
-            open_file_dialog,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
