@@ -10,7 +10,7 @@
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
-#define EARTH_RADIUS_NM 3440.065  // Earth radius in nautical miles
+#define EARTH_RADIUS_NM 3443.92  // Earth radius in nautical miles (standard value)
 
 Recorder& Recorder::Instance() {
     static Recorder instance;
@@ -755,23 +755,13 @@ AirportInfo Recorder::DetectNearestAirport(float lat, float lon) {
             result.lat = navLat;
             result.lon = navLon;
             
-            // Safely copy ICAO code - use strnlen for safety
-            size_t icaoLen = 0;
-            for (size_t i = 0; i < sizeof(navID) && navID[i] != '\0'; i++) {
-                icaoLen = i + 1;
-            }
-            icaoLen = std::min(icaoLen, sizeof(result.icao) - 1);
-            std::strncpy(result.icao, navID, icaoLen);
-            result.icao[icaoLen] = '\0';
+            // Safely copy ICAO code with explicit null termination
+            std::strncpy(result.icao, navID, sizeof(result.icao) - 1);
+            result.icao[sizeof(result.icao) - 1] = '\0';
             
-            // Safely copy name - use strnlen for safety
-            size_t nameLen = 0;
-            for (size_t i = 0; i < sizeof(navName) && navName[i] != '\0'; i++) {
-                nameLen = i + 1;
-            }
-            nameLen = std::min(nameLen, sizeof(result.name) - 1);
-            std::strncpy(result.name, navName, nameLen);
-            result.name[nameLen] = '\0';
+            // Safely copy name with explicit null termination
+            std::strncpy(result.name, navName, sizeof(result.name) - 1);
+            result.name[sizeof(result.name) - 1] = '\0';
         }
     }
     
