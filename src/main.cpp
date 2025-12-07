@@ -3,6 +3,7 @@
 #include "DatarefManager.h"
 #include "Recorder.h"
 #include "UIManager.h"
+#include <cstring>
 
 // Plugin information
 #define PLUGIN_NAME "XBlackBox"

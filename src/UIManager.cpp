@@ -149,26 +149,6 @@ void UIManager::ShowNotification(const std::string& message) {
     LogInfo(message);
 }
 
-void UIManager::DrawStatusWindow() {
-    // Simple status display using ImGui
-    ImGui::Begin("XBlackBox Status", &m_showStatusWindow);
-    
-    ImGui::Text("Recording: %s", Recorder::Instance().IsRecording() ? "YES" : "NO");
-    ImGui::Text("Auto Mode: %s", Settings::Instance().GetAutoMode() ? "ON" : "OFF");
-    ImGui::Text("Level: %s", Settings::Instance().GetRecordingLevelName().c_str());
-    ImGui::Text("Interval: %.2f Hz", 1.0f / Settings::Instance().GetRecordingInterval());
-    
-    if (Recorder::Instance().IsRecording()) {
-        ImGui::Separator();
-        ImGui::Text("Records: %d", Recorder::Instance().GetRecordCount());
-        ImGui::Text("Duration: %d sec", Recorder::Instance().GetDuration());
-        ImGui::Text("Bytes: %zu", Recorder::Instance().GetBytesWritten());
-        ImGui::Text("File: %s", Recorder::Instance().GetCurrentFilePath().c_str());
-    }
-    
-    ImGui::End();
-}
-
 // Menu callbacks
 void UIManager::MenuCallback_AutoMode(void* menuRef, void* itemRef) {
     (void)menuRef;  // Unused
