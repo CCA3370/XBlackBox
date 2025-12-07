@@ -61,7 +61,12 @@ set(HEADERS
 )
 
 # Create the plugin library
-add_library(XBlackBox SHARED ${SOURCES} ${HEADERS})
+# Use MODULE for macOS to support -bundle flag, SHARED for other platforms
+if(APPLE)
+    add_library(XBlackBox MODULE ${SOURCES} ${HEADERS})
+else()
+    add_library(XBlackBox SHARED ${SOURCES} ${HEADERS})
+endif()
 
 # Set output name
 set_target_properties(XBlackBox PROPERTIES
