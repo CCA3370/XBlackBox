@@ -394,6 +394,37 @@ class XDRData:
                     'type': dr['type']
                 })
         return params
+    
+    def get_parameter_derivative(self, dataref_index: int, array_index: int = 0,
+                                 time_range: Optional[tuple] = None) -> tuple:
+        """Calculate derivative (rate of change) of a parameter"""
+        timestamps, values = self.get_parameter_data(
+            dataref_index, array_index, time_range, downsample_factor=1
+        )
+        
+        if len(timestamps) < 2:
+            return [], []
+        
+        # Calculate derivative using numpy
+        values_array = np.array(values)
+        timestamps_array = np.array(timestamps)
+        
+        # Use gradient for better numerical derivative
+        derivative = np.gradient(values_array, timestamps_array)
+        
+        return timestamps, derivative.tolist()
+    
+    def calculate_correlation(self, param1_index: int, param1_array_idx: int,
+                             param2_index: int, param2_array_idx: int,
+                             time_range: Optional[tuple] = None) -> float:
+        """Calculate correlation coefficient between two parameters"""
+        _, values1 = self.get_parameter_data(param1_index, param1_array_idx, time_range, 1)
+        _, values2 = self.get_parameter_data(param2_index, param2_array_idx, time_range, 1)
+        
+        if len(values1) != len(values2) or len(values1) < 2:
+            return 0.0
+        
+        return float(np.corrcoef(values1, values2)[0, 1])
         
     def export_to_csv(self, output_path: str):
         """Export data to CSV file"""
@@ -443,7 +474,7 @@ class PlotCanvas(FigureCanvas):
         
     def plot_parameters(self, data: XDRData, parameters: List[Dict], 
                         separate_axes: bool = False, show_grid: bool = True,
-                        time_range: Optional[tuple] = None):
+                        time_range: Optional[tuple] = None, plot_derivative: bool = False):
         """Plot multiple parameters with their assigned colors
         
         Args:
@@ -452,6 +483,7 @@ class PlotCanvas(FigureCanvas):
             separate_axes: Whether to use separate axes for each parameter
             show_grid: Whether to show grid
             time_range: Optional (start, end) time range to plot
+            plot_derivative: Whether to plot derivative instead of raw values
         """
         self.fig.clear()
         self.axes = []
@@ -473,17 +505,24 @@ class PlotCanvas(FigureCanvas):
                 ax.set_facecolor('#1e1e1e')
                 self.axes.append(ax)
                 
-                timestamps, values = data.get_parameter_data(
-                    param['index'], param['array_index'],
-                    time_range=time_range, downsample_factor=downsample_factor
-                )
+                if plot_derivative:
+                    timestamps, values = data.get_parameter_derivative(
+                        param['index'], param['array_index'], time_range
+                    )
+                    ylabel = f"d/dt {self._short_name(param['name'])}"
+                else:
+                    timestamps, values = data.get_parameter_data(
+                        param['index'], param['array_index'],
+                        time_range=time_range, downsample_factor=downsample_factor
+                    )
+                    ylabel = self._short_name(param['name'])
                 
                 # Use assigned color from parameter
                 color = param.get('color', '#ffffff')
                 line, = ax.plot(timestamps, values, color=color, linewidth=1.0)
                 self.plots.append(line)
                 
-                ax.set_ylabel(self._short_name(param['name']), fontsize=8, color='white')
+                ax.set_ylabel(ylabel, fontsize=8, color='white')
                 ax.tick_params(colors='white', labelsize=8)
                 ax.grid(show_grid, alpha=0.3)
                 
@@ -497,19 +536,27 @@ class PlotCanvas(FigureCanvas):
             self.axes.append(ax)
             
             for i, param in enumerate(parameters):
-                timestamps, values = data.get_parameter_data(
-                    param['index'], param['array_index'],
-                    time_range=time_range, downsample_factor=downsample_factor
-                )
+                if plot_derivative:
+                    timestamps, values = data.get_parameter_derivative(
+                        param['index'], param['array_index'], time_range
+                    )
+                    label = f"d/dt {self._short_name(param['name'])}"
+                else:
+                    timestamps, values = data.get_parameter_data(
+                        param['index'], param['array_index'],
+                        time_range=time_range, downsample_factor=downsample_factor
+                    )
+                    label = self._short_name(param['name'])
                 
                 # Use assigned color from parameter
                 color = param.get('color', '#ffffff')
                 line, = ax.plot(timestamps, values, color=color, linewidth=1.0,
-                               label=self._short_name(param['name']))
+                               label=label)
                 self.plots.append(line)
                 
             ax.set_xlabel('Time (seconds)', color='white')
-            ax.set_ylabel('Value', color='white')
+            ylabel = 'Rate of Change' if plot_derivative else 'Value'
+            ax.set_ylabel(ylabel, color='white')
             ax.tick_params(colors='white')
             ax.grid(show_grid, alpha=0.3)
             ax.legend(loc='upper right', fontsize=8, facecolor='#2b2b2b', 
@@ -933,6 +980,111 @@ class StatisticsWidget(QWidget):
         self.table.resizeColumnsToContents()
 
 
+class CorrelationWidget(QWidget):
+    """Widget for analyzing parameter correlations"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.data = None
+        self.selected_params = []
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Title
+        title = QLabel("<b>Parameter Correlation Analysis</b>")
+        title.setStyleSheet("font-size: 12pt;")
+        layout.addWidget(title)
+        
+        info = QLabel("Correlation coefficient ranges from -1 (negative correlation) to +1 (positive correlation)")
+        info.setWordWrap(True)
+        info.setStyleSheet("color: #aaaaaa; font-size: 9pt;")
+        layout.addWidget(info)
+        
+        # Correlation table
+        self.table = QTableWidget()
+        self.table.setAlternatingRowColors(True)
+        layout.addWidget(self.table)
+        
+        # Refresh button
+        btn_layout = QHBoxLayout()
+        self.btn_refresh = QPushButton("Calculate Correlations")
+        self.btn_refresh.clicked.connect(self.update_correlations)
+        btn_layout.addWidget(self.btn_refresh)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+        
+    def set_data(self, data: XDRData, selected_params: List[Dict]):
+        """Set data and update correlations"""
+        self.data = data
+        self.selected_params = selected_params
+        self.update_correlations()
+        
+    def update_correlations(self):
+        """Update correlation matrix"""
+        if not self.data or len(self.selected_params) < 2:
+            self.table.clear()
+            self.table.setRowCount(0)
+            if len(self.selected_params) < 2:
+                self.table.setColumnCount(1)
+                self.table.setHorizontalHeaderLabels(['Info'])
+                self.table.setRowCount(1)
+                self.table.setItem(0, 0, QTableWidgetItem("Select at least 2 parameters to analyze correlations"))
+            return
+        
+        n = len(self.selected_params)
+        param_names = [p['name'] for p in self.selected_params]
+        
+        self.table.setColumnCount(n + 1)
+        self.table.setRowCount(n)
+        
+        headers = ['Parameter'] + [self._short_name(name) for name in param_names]
+        self.table.setHorizontalHeaderLabels(headers)
+        
+        for i, param1 in enumerate(self.selected_params):
+            # Set row header
+            self.table.setItem(i, 0, QTableWidgetItem(self._short_name(param1['name'])))
+            
+            for j, param2 in enumerate(self.selected_params):
+                if i == j:
+                    # Diagonal - perfect correlation with itself
+                    item = QTableWidgetItem("1.00")
+                    item.setBackground(QColor(0, 200, 0, 100))
+                else:
+                    # Calculate correlation
+                    corr = self.data.calculate_correlation(
+                        param1['index'], param1['array_index'],
+                        param2['index'], param2['array_index']
+                    )
+                    
+                    item = QTableWidgetItem(f"{corr:.3f}")
+                    
+                    # Color code based on correlation strength
+                    abs_corr = abs(corr)
+                    if abs_corr > 0.7:
+                        color = QColor(0, 200, 0, 100) if corr > 0 else QColor(200, 0, 0, 100)
+                    elif abs_corr > 0.4:
+                        color = QColor(200, 200, 0, 80)
+                    else:
+                        color = QColor(100, 100, 100, 50)
+                    
+                    item.setBackground(color)
+                
+                self.table.setItem(i, j + 1, item)
+        
+        self.table.resizeColumnsToContents()
+    
+    def _short_name(self, name: str) -> str:
+        """Get shortened parameter name"""
+        if len(name) > 30:
+            parts = name.split('/')
+            if len(parts) > 2:
+                return f".../{parts[-1]}"
+        return name
+
+
 class MainWindow(QMainWindow):
     """Main application window"""
     
@@ -1054,6 +1206,11 @@ class MainWindow(QMainWindow):
         self.cb_grid.stateChanged.connect(self.update_plot)
         options_layout.addWidget(self.cb_grid)
         
+        self.cb_derivative = QCheckBox("Plot Derivative")
+        self.cb_derivative.setToolTip("Plot rate of change instead of raw values")
+        self.cb_derivative.stateChanged.connect(self.update_plot)
+        options_layout.addWidget(self.cb_derivative)
+        
         options_layout.addSpacing(20)
         
         # Live mode checkbox
@@ -1101,6 +1258,10 @@ class MainWindow(QMainWindow):
         # Statistics tab
         self.statistics_widget = StatisticsWidget()
         self.tabs.addTab(self.statistics_widget, "Statistics")
+        
+        # Correlation tab
+        self.correlation_widget = CorrelationWidget()
+        self.tabs.addTab(self.correlation_widget, "Correlation")
         
         right_layout.addWidget(self.tabs, 1)
         
@@ -1363,16 +1524,22 @@ class MainWindow(QMainWindow):
         # Update statistics if on stats tab
         if self.tabs.currentIndex() == 2:
             self.statistics_widget.set_data(self.data, selected)
+        
+        # Update correlation if on correlation tab
+        if self.tabs.currentIndex() == 3:
+            self.correlation_widget.set_data(self.data, selected)
             
         self.canvas.plot_parameters(
             self.data,
             selected,
             separate_axes=self.cb_separate_axes.isChecked(),
             show_grid=self.cb_grid.isChecked(),
-            time_range=self.time_range
+            time_range=self.time_range,
+            plot_derivative=self.cb_derivative.isChecked()
         )
         
-        self.statusBar().showMessage(f"Plotting {len(selected)} parameter(s)")
+        mode = "derivative" if self.cb_derivative.isChecked() else "value"
+        self.statusBar().showMessage(f"Plotting {len(selected)} parameter(s) ({mode} mode)")
         
     def show_shortcuts(self):
         """Show keyboard shortcuts help"""
