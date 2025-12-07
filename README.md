@@ -24,7 +24,7 @@ See [VIEWER_GUIDE.md](VIEWER_GUIDE.md) for complete documentation.
 - **Three Recording Levels**:
   - **Simple**: Basic flight data (position, attitude, velocities) - ~25 parameters
   - **Normal**: + flight controls, engines, systems - ~70 parameters  
-  - **Detailed**: Everything including autopilot, weather, warnings, etc. - ~180+ parameters
+  - **Detailed**: Everything including autopilot, weather, warnings, failures, etc. - ~230+ parameters
 - **Efficient Binary Format**: Compact .xdr files for minimal disk usage and fast I/O
 - **Optimized Performance**: Buffered binary I/O, efficient dataref caching
 - **Auto Recording Mode**: Automatically starts/stops recording based on:
@@ -248,6 +248,59 @@ X-Plane 12/Output/XBlackBox/config.ini
 **Additional Forces & Moments**
 - Aerodynamic forces (side, normal, axial)
 - Roll, Pitch, Yaw moments
+
+**Cockpit Switches & Lights**
+- Battery switches (all batteries)
+- Avionics master switch
+- Landing lights, Beacon, Strobe lights
+- Navigation lights, Taxi lights
+
+**TCAS & Traffic**
+- Number of TCAS targets
+
+**Enhanced Autopilot Status**
+- FMS VNAV mode
+- Approach status (off/armed/captured)
+- NAV status (off/armed/captured)
+
+**System Failures Monitoring**
+- Autopilot servo failures (aileron, elevator, rudder)
+- Instrument failures (gyro, horizon, airspeed, altimeter)
+
+**Engine Extended Parameters**
+- Thrust reverser deployment
+- Fuel burn status
+- Fuel flow (kg/sec)
+- Nacelle temperature
+
+**Control Trim Settings**
+- Elevator, Aileron, Rudder trim
+
+**GPS Navigation Indicators**
+- GPS DME distance
+- GPS HDEF/VDEF deviation dots
+- GPS course
+
+**Weight & Center of Gravity**
+- Payload weight
+- Jettisoned weight
+- Longitudinal CG position
+
+**Performance Metrics**
+- Local velocity components (X, Y, Z)
+- True magnetic heading
+
+**Weather Information**
+- Visibility
+- Cloud base, coverage, and type (3 layers)
+- Sea level and ambient temperature
+
+**Pressurization Controls**
+- Safety valve position
+- Dump valve status
+
+**Replay Mode**
+- Replay mode detection
 
 ## File Format
 
