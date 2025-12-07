@@ -168,6 +168,13 @@ npm run build
 - Theme switching
 - Data export to CSV
 
+### What Was Added
+- **Flight Phase Analysis**: New aviation-specific feature
+  - Automatic detection of takeoff and landing phases
+  - Key performance metrics (max altitude, speed, fuel flow)
+  - Landing G-force analysis
+  - Phase timeline visualization
+
 ### What Changed
 - **File Upload**: Now uses native file dialog instead of web upload
 - **File Path Input**: Still available but uses Tauri file system APIs
@@ -178,6 +185,25 @@ npm run build
 - HTTP/CORS handling
 - Session management (not needed in desktop app)
 - Upload folder management (uses temp files)
+- **FFT Analysis**: Removed frequency analysis (not relevant for aviation black box data)
+
+## GitHub Actions CI/CD
+
+A new workflow has been added to automatically build the Tauri application:
+
+### Workflow: `.github/workflows/build-tauri.yml`
+
+Triggered on:
+- Push to `main` or `master` branches
+- Pull requests to `main` or `master`
+- Manual workflow dispatch
+
+Builds for:
+- **Windows**: Creates `.exe` executable
+- **macOS**: Creates `.app` bundle
+- **Linux**: Creates native binary
+
+All artifacts are automatically uploaded and retained for 90 days.
 
 ## Building for Different Platforms
 
@@ -222,12 +248,28 @@ The Tauri application has been:
 - ✅ All Rust code compiles without errors
 - ✅ Frontend files properly configured
 - ✅ API wrapper correctly implemented
+- ✅ FFT feature removed and replaced with flight analysis
+- ✅ CI/CD pipeline configured for automatic builds
 
 ## Future Improvements
 
 ### Potential Enhancements
-1. **FFT Implementation**: Add real FFT computation (currently placeholder)
+1. **Advanced Flight Analysis**: 
+   - Approach analysis with glideslope deviation
+   - Takeoff performance metrics
+   - Fuel efficiency analysis per flight phase
 2. **Real-time Updates**: Add file watching for live mode
+3. **Export Options**: Add more export formats (JSON, Parquet)
+4. **Preferences**: Add persistent settings storage
+5. **Recent Files**: Add recent files menu
+6. **Drag & Drop**: Enable drag-drop for XDR files
+7. **Auto-updates**: Implement Tauri updater plugin
+8. **Anomaly Detection**: Automatic detection of unusual flight parameters
+
+### Known Limitations
+1. Flight phase detection uses fixed 10ft AGL threshold (future: customizable)
+2. File dialog only supports single file selection
+3. No web browser access (by design - desktop only)
 3. **Export Options**: Add more export formats (JSON, Parquet)
 4. **Preferences**: Add persistent settings storage
 5. **Recent Files**: Add recent files menu

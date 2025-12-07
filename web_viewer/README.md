@@ -12,9 +12,15 @@ The XBlackBox Tauri Viewer is a cross-platform desktop application for visualizi
 - **Fast XDR Parsing**: Rust-based backend for efficient file reading and data processing
 - **Interactive Visualizations**: Plotly-based charts for parameter analysis
 - **Statistics & Correlation**: Built-in statistical analysis and parameter correlation
+- **Flight Phase Analysis**: Aviation-specific analysis with automatic phase detection
+  - Takeoff and landing detection
+  - Key performance metrics (altitude, speed, fuel flow)
+  - Landing G-force analysis
 - **Flight Path Visualization**: 3D flight path rendering
 - **Data Export**: Export to CSV format
 - **Dark/Light Themes**: Multiple color schemes
+
+See [FLIGHT_ANALYSIS_GUIDE.md](../FLIGHT_ANALYSIS_GUIDE.md) for details on the aviation analysis features.
 
 ## Requirements
 
