@@ -4,7 +4,8 @@ XBlackBox XDR Viewer - PySide6 GUI Application
 Visualize and analyze X-Plane flight data recordings
 
 Enhanced with:
-- Modern UI design with vibrant colors
+- Modern UI design with multiple themes
+- Multi-language support (i18n)
 - Performance optimization with data downsampling
 - Advanced statistics and analysis
 - FFT (Frequency Analysis) for oscillation detection
@@ -44,6 +45,10 @@ from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as Navigation
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+
+# Import theme and translation systems
+from themes import get_current_theme, set_theme, get_theme_names, get_theme_by_name, DEFAULT_THEME
+from translations import tr, set_language, get_current_language, DEFAULT_LANGUAGE
 
 
 class XDRData:
@@ -636,29 +641,9 @@ class PlotCanvas(FigureCanvas):
         return name
 
 
-# Modern, vibrant color palette for parameters - 20 distinct colors
-PARAMETER_COLORS = [
-    '#0d7377',  # teal (primary brand color)
-    '#ff6b6b',  # coral red
-    '#4ecdc4',  # turquoise
-    '#ffe66d',  # sunny yellow
-    '#a8dadc',  # light blue
-    '#f06292',  # pink
-    '#81c784',  # green
-    '#ffab91',  # peach
-    '#ce93d8',  # purple
-    '#64b5f6',  # sky blue
-    '#ff8a65',  # orange
-    '#aed581',  # lime
-    '#9fa8da',  # indigo
-    '#90caf9',  # light blue
-    '#f48fb1',  # light pink
-    '#80cbc4',  # teal light
-    '#ffcc80',  # amber
-    '#bcaaa4',  # brown
-    '#b39ddb',  # deep purple light
-    '#80deea',  # cyan
-]
+def get_parameter_colors():
+    """Get parameter colors from current theme"""
+    return get_current_theme().plot_colors
 
 
 class ParameterSelector(QWidget):
@@ -764,7 +749,8 @@ class ParameterSelector(QWidget):
                 # Manually assign color since signal is blocked
                 param_name = self.parameters[i]['name']
                 if param_name not in self.assigned_colors:
-                    color = PARAMETER_COLORS[self.next_color_index % len(PARAMETER_COLORS)]
+                    colors = get_parameter_colors()
+                    color = colors[self.next_color_index % len(colors)]
                     self.assigned_colors[param_name] = color
                     self.next_color_index += 1
                 
@@ -801,7 +787,8 @@ class ParameterSelector(QWidget):
         if state == 2:  # Qt.Checked is 2
             # Assign a new color if not already assigned
             if param_name not in self.assigned_colors:
-                color = PARAMETER_COLORS[self.next_color_index % len(PARAMETER_COLORS)]
+                colors = get_parameter_colors()
+                color = colors[self.next_color_index % len(colors)]
                 self.assigned_colors[param_name] = color
                 self.next_color_index += 1
             
@@ -1535,6 +1522,17 @@ class MainWindow(QMainWindow):
         # Enable drag and drop
         self.setAcceptDrops(True)
         
+        # Load saved theme and language preferences
+        self.saved_theme = self.settings.value('theme', DEFAULT_THEME)
+        self.saved_language = self.settings.value('language', DEFAULT_LANGUAGE)
+        
+        # Apply saved theme
+        if self.saved_theme in get_theme_names():
+            set_theme(self.saved_theme)
+        
+        # Apply saved language
+        set_language(self.saved_language)
+        
         self.setup_ui()
         self.setup_menu()
         self.setup_toolbar()
@@ -1557,7 +1555,7 @@ class MainWindow(QMainWindow):
                     event.acceptProposedAction()
         
     def setup_ui(self):
-        self.setWindowTitle("XBlackBox XDR Viewer - Modern Edition")
+        self.setWindowTitle(tr('window_title'))
         self.setMinimumSize(1200, 800)
         self.setStyleSheet(self.get_stylesheet())
         
@@ -1806,17 +1804,89 @@ class MainWindow(QMainWindow):
         flight_path_action.triggered.connect(self.show_flight_path_tab)
         analysis_menu.addAction(flight_path_action)
         
-        # Help menu
-        help_menu = menubar.addMenu("&Help")
+        # Theme menu (NEW)
+        theme_menu = menubar.addMenu(tr('menu_theme'))
         
-        shortcuts_action = QAction("&Keyboard Shortcuts", self)
+        self.theme_actions = []
+        for theme_key in get_theme_names():
+            theme = get_theme_by_name(theme_key)
+            action = QAction(theme.name, self)
+            action.setCheckable(True)
+            action.triggered.connect(partial(self.change_theme, theme_key))
+            theme_menu.addAction(action)
+            self.theme_actions.append((theme_key, action))
+        
+        # Set currently active theme as checked
+        current_theme = self.saved_theme if hasattr(self, 'saved_theme') else DEFAULT_THEME
+        for theme_key, action in self.theme_actions:
+            if theme_key == current_theme:
+                action.setChecked(True)
+                break
+        
+        # Language menu (NEW)
+        language_menu = menubar.addMenu(tr('menu_language'))
+        
+        lang_system_action = QAction(tr('lang_system'), self)
+        lang_system_action.setCheckable(True)
+        lang_system_action.triggered.connect(partial(self.change_language, 'system'))
+        language_menu.addAction(lang_system_action)
+        
+        language_menu.addSeparator()
+        
+        lang_english_action = QAction(tr('lang_english'), self)
+        lang_english_action.setCheckable(True)
+        lang_english_action.triggered.connect(partial(self.change_language, 'en_US'))
+        language_menu.addAction(lang_english_action)
+        
+        lang_chinese_action = QAction(tr('lang_chinese'), self)
+        lang_chinese_action.setCheckable(True)
+        lang_chinese_action.triggered.connect(partial(self.change_language, 'zh_CN'))
+        language_menu.addAction(lang_chinese_action)
+        
+        lang_japanese_action = QAction(tr('lang_japanese'), self)
+        lang_japanese_action.setCheckable(True)
+        lang_japanese_action.triggered.connect(partial(self.change_language, 'ja_JP'))
+        language_menu.addAction(lang_japanese_action)
+        
+        lang_spanish_action = QAction(tr('lang_spanish'), self)
+        lang_spanish_action.setCheckable(True)
+        lang_spanish_action.triggered.connect(partial(self.change_language, 'es_ES'))
+        language_menu.addAction(lang_spanish_action)
+        
+        lang_french_action = QAction(tr('lang_french'), self)
+        lang_french_action.setCheckable(True)
+        lang_french_action.triggered.connect(partial(self.change_language, 'fr_FR'))
+        language_menu.addAction(lang_french_action)
+        
+        # Store language actions for later
+        self.lang_actions = {
+            'system': lang_system_action,
+            'en_US': lang_english_action,
+            'zh_CN': lang_chinese_action,
+            'ja_JP': lang_japanese_action,
+            'es_ES': lang_spanish_action,
+            'fr_FR': lang_french_action,
+        }
+        
+        # Set currently saved language as checked
+        current_lang = self.saved_language if hasattr(self, 'saved_language') else DEFAULT_LANGUAGE
+        if current_lang in self.lang_actions:
+            self.lang_actions[current_lang].setChecked(True)
+        else:
+            # If saved language is 'system' or unknown, check system option
+            self.lang_actions['system'].setChecked(True)
+        
+        # Help menu
+        help_menu = menubar.addMenu(tr('menu_help'))
+        
+        shortcuts_action = QAction(tr('action_shortcuts'), self)
         shortcuts_action.setShortcut(QKeySequence.HelpContents)
         shortcuts_action.triggered.connect(self.show_shortcuts)
         help_menu.addAction(shortcuts_action)
         
         help_menu.addSeparator()
         
-        about_action = QAction("&About", self)
+        about_action = QAction(tr('action_about'), self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
         
@@ -2183,282 +2253,46 @@ class MainWindow(QMainWindow):
         )
         
     def get_stylesheet(self):
-        """Get application stylesheet with modern dark theme"""
-        return """
-            QMainWindow {
-                background-color: #1e1e1e;
-            }
-            QWidget {
-                background-color: #1e1e1e;
-                color: #e0e0e0;
-                font-family: 'Segoe UI', 'San Francisco', 'Helvetica Neue', Arial, sans-serif;
-                font-size: 10pt;
-            }
-            QMenuBar {
-                background-color: #2d2d2d;
-                border-bottom: 1px solid #3d3d3d;
-                padding: 4px;
-            }
-            QMenuBar::item {
-                background-color: transparent;
-                padding: 6px 12px;
-                border-radius: 4px;
-            }
-            QMenuBar::item:selected {
-                background-color: #0d7377;
-            }
-            QMenuBar::item:pressed {
-                background-color: #0a5f62;
-            }
-            QMenu {
-                background-color: #2d2d2d;
-                border: 1px solid #3d3d3d;
-                border-radius: 6px;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 8px 24px 8px 12px;
-                border-radius: 4px;
-            }
-            QMenu::item:selected {
-                background-color: #0d7377;
-                color: #ffffff;
-            }
-            QMenu::separator {
-                height: 1px;
-                background: #3d3d3d;
-                margin: 4px 8px;
-            }
-            QToolBar {
-                background-color: #2d2d2d;
-                border: none;
-                border-bottom: 1px solid #3d3d3d;
-                spacing: 8px;
-                padding: 4px;
-            }
-            QToolButton {
-                background-color: transparent;
-                border: none;
-                border-radius: 6px;
-                padding: 6px;
-            }
-            QToolButton:hover {
-                background-color: #3d3d3d;
-            }
-            QToolButton:pressed {
-                background-color: #0d7377;
-            }
-            QStatusBar {
-                background-color: #2d2d2d;
-                border-top: 1px solid #3d3d3d;
-                padding: 4px;
-                color: #b0b0b0;
-            }
-            QGroupBox {
-                background-color: #252525;
-                border: 2px solid #3d3d3d;
-                border-radius: 8px;
-                margin-top: 16px;
-                padding-top: 16px;
-                font-weight: bold;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                left: 16px;
-                top: 8px;
-                padding: 0 8px;
-                color: #0d7377;
-                font-size: 11pt;
-            }
-            QPushButton {
-                background-color: #0d7377;
-                color: #ffffff;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 20px;
-                font-weight: 500;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background-color: #14919b;
-            }
-            QPushButton:pressed {
-                background-color: #0a5f62;
-            }
-            QPushButton:disabled {
-                background-color: #3d3d3d;
-                color: #666666;
-            }
-            QPushButton#secondaryButton {
-                background-color: #3d3d3d;
-            }
-            QPushButton#secondaryButton:hover {
-                background-color: #4d4d4d;
-            }
-            QCheckBox {
-                spacing: 8px;
-                color: #e0e0e0;
-            }
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-                border-radius: 4px;
-                border: 2px solid #3d3d3d;
-                background-color: #2d2d2d;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #0d7377;
-                border-color: #0d7377;
-                image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOSIgdmlld0JveD0iMCAwIDEyIDkiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEgNEw0LjUgNy41TDExIDEiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+);
-            }
-            QCheckBox::indicator:hover {
-                border-color: #0d7377;
-            }
-            QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
-                background-color: #2d2d2d;
-                border: 2px solid #3d3d3d;
-                border-radius: 6px;
-                padding: 6px 10px;
-                color: #e0e0e0;
-                selection-background-color: #0d7377;
-            }
-            QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
-                border-color: #0d7377;
-            }
-            QLineEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover {
-                border-color: #4d4d4d;
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 24px;
-            }
-            QComboBox::down-arrow {
-                image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEgMUw2IDZMMTEgMSIgc3Ryb2tlPSIjZTBlMGUwIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==);
-                width: 12px;
-                height: 8px;
-            }
-            QScrollArea {
-                border: 2px solid #3d3d3d;
-                border-radius: 8px;
-                background-color: #252525;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background-color: #2d2d2d;
-                width: 12px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #4d4d4d;
-                border-radius: 6px;
-                min-height: 30px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: #5d5d5d;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-            QScrollBar:horizontal {
-                border: none;
-                background-color: #2d2d2d;
-                height: 12px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:horizontal {
-                background-color: #4d4d4d;
-                border-radius: 6px;
-                min-width: 30px;
-            }
-            QScrollBar::handle:horizontal:hover {
-                background-color: #5d5d5d;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                width: 0px;
-            }
-            QTableWidget {
-                background-color: #252525;
-                alternate-background-color: #2a2a2a;
-                gridline-color: #3d3d3d;
-                border: 2px solid #3d3d3d;
-                border-radius: 8px;
-                selection-background-color: #0d7377;
-            }
-            QTableWidget::item {
-                padding: 6px;
-            }
-            QHeaderView::section {
-                background-color: #2d2d2d;
-                border: none;
-                border-right: 1px solid #3d3d3d;
-                border-bottom: 2px solid #3d3d3d;
-                padding: 8px;
-                font-weight: bold;
-                color: #0d7377;
-            }
-            QHeaderView::section:hover {
-                background-color: #3d3d3d;
-            }
-            QTabWidget::pane {
-                border: 2px solid #3d3d3d;
-                border-radius: 8px;
-                top: -2px;
-                background-color: #252525;
-            }
-            QTabBar::tab {
-                background-color: #2d2d2d;
-                border: 2px solid #3d3d3d;
-                border-bottom: none;
-                border-top-left-radius: 8px;
-                border-top-right-radius: 8px;
-                padding: 10px 20px;
-                margin-right: 4px;
-                font-weight: 500;
-            }
-            QTabBar::tab:selected {
-                background-color: #252525;
-                border-bottom-color: #252525;
-                color: #0d7377;
-            }
-            QTabBar::tab:hover:!selected {
-                background-color: #3d3d3d;
-            }
-            QSplitter::handle {
-                background-color: #3d3d3d;
-                width: 2px;
-                height: 2px;
-            }
-            QSplitter::handle:hover {
-                background-color: #0d7377;
-            }
-            QLabel {
-                color: #e0e0e0;
-            }
-            QProgressDialog {
-                background-color: #2d2d2d;
-                border: 2px solid #3d3d3d;
-                border-radius: 8px;
-            }
-            QProgressBar {
-                border: 2px solid #3d3d3d;
-                border-radius: 6px;
-                background-color: #2d2d2d;
-                text-align: center;
-                color: #e0e0e0;
-            }
-            QProgressBar::chunk {
-                background-color: #0d7377;
-                border-radius: 4px;
-            }
-            QToolTip {
-                background-color: #2d2d2d;
-                color: #e0e0e0;
-                border: 1px solid #0d7377;
-                border-radius: 6px;
-                padding: 6px;
-            }
-        """
+        """Get application stylesheet from current theme"""
+        return get_current_theme().get_stylesheet()
+    
+    def change_theme(self, theme_name: str):
+        """Change application theme"""
+        set_theme(theme_name)
+        self.setStyleSheet(self.get_stylesheet())
+        
+        # Update checkmarks in theme menu
+        for key, action in self.theme_actions:
+            action.setChecked(key == theme_name)
+        
+        # Redraw plots with new theme colors
+        self.param_selector.assigned_colors = {}
+        self.param_selector.next_color_index = 0
+        self.update_plot()
+        
+        # Save theme preference
+        self.settings.setValue('theme', theme_name)
+    
+    def change_language(self, lang_code: str):
+        """Change application language"""
+        set_language(lang_code)
+        
+        # Update checkmarks in language menu
+        for key, action in self.lang_actions.items():
+            if lang_code == 'system':
+                action.setChecked(key == 'system')
+            else:
+                action.setChecked(key == lang_code)
+        
+        # Save language preference
+        self.settings.setValue('language', lang_code)
+        
+        # Show message that restart is needed
+        QMessageBox.information(
+            self,
+            tr('dialog_info'),
+            tr('restart_required')
+        )
 
 
 def main():

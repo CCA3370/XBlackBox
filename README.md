@@ -2,11 +2,18 @@
 
 XBlackBox is a high-performance C++ plugin for X-Plane 12 that records comprehensive flight data in real-time, similar to a real aircraft's flight data recorder (black box).
 
-## 🆕 What's New - Enhanced XDR Viewer
+## 🆕 What's New - XDR Viewer v3.0
 
-The XDR Viewer has been significantly enhanced with advanced analysis capabilities:
+The XDR Viewer has been significantly enhanced with theme and language support:
 
-### Key Enhancements
+### Latest Features (v3.0)
+- **🎨 Multiple Themes**: Choose from Dark, Light, or High Contrast themes
+- **🌍 Multi-Language Support**: Full interface in English and Chinese (中文)
+- **🔄 Auto-Detection**: Automatically follows your system language
+- **⚙️ Persistent Preferences**: Your theme and language choices are saved
+- **♿ Accessibility**: High contrast theme for better visibility
+
+### Previous Enhancements (v2.5)
 - **📊 Statistics Analysis**: Min/Max/Mean/Median/Std Dev for all parameters
 - **🔗 Correlation Analysis**: Discover relationships between parameters
 - **📈 Derivative Plotting**: Visualize rate of change (d/dt)
@@ -16,7 +23,8 @@ The XDR Viewer has been significantly enhanced with advanced analysis capabiliti
 - **📂 Recent Files**: Quick access to frequently used files
 - **🖱️ Drag & Drop**: Simple file opening
 
-See [VIEWER_GUIDE.md](VIEWER_GUIDE.md) for complete documentation.
+See [THEME_I18N_GUIDE.md](THEME_I18N_GUIDE.md) for theme and language documentation.  
+See [VIEWER_GUIDE.md](VIEWER_GUIDE.md) for complete viewer documentation.
 
 ## Features
 
