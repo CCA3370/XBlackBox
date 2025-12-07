@@ -23,15 +23,20 @@ void DatarefManager::Reload() {
 void DatarefManager::LoadDatarefs() {
     RecordingLevel level = Settings::Instance().GetRecordingLevel();
     
-    // Always load basic
+    // Recording levels are cumulative:
+    // Level 1: Basic only
+    // Level 2: Basic + Normal
+    // Level 3: Basic + Normal + Detailed
+    
+    // Always load basic (Level 1)
     LoadBasicDatarefs();
     
-    // Load normal if level >= 2
+    // Load normal if level >= 2 (Levels 2 and 3)
     if (level >= RecordingLevel::Normal) {
         LoadNormalDatarefs();
     }
     
-    // Load detailed if level >= 3
+    // Load detailed if level >= 3 (Level 3 only)
     if (level >= RecordingLevel::Detailed) {
         LoadDetailedDatarefs();
     }
@@ -230,6 +235,77 @@ void DatarefManager::LoadDetailedDatarefs() {
     AddDataref("sim/flightmodel/forces/L_total", "Roll moment", DatarefType::Float);
     AddDataref("sim/flightmodel/forces/M_total", "Pitch moment", DatarefType::Float);
     AddDataref("sim/flightmodel/forces/N_total", "Yaw moment", DatarefType::Float);
+    
+    // Cockpit switches and lights
+    AddDataref("sim/cockpit2/switches/battery_on", "Battery switches", DatarefType::Int, MAX_BATTERIES);
+    AddDataref("sim/cockpit2/switches/avionics_power_on", "Avionics master switch", DatarefType::Int);
+    AddDataref("sim/cockpit2/switches/landing_lights_on", "Landing lights switch", DatarefType::Int);
+    AddDataref("sim/cockpit2/switches/beacon_on", "Beacon light switch", DatarefType::Int);
+    AddDataref("sim/cockpit2/switches/strobe_lights_on", "Strobe lights switch", DatarefType::Int);
+    AddDataref("sim/cockpit2/switches/navigation_lights_on", "Nav lights switch", DatarefType::Int);
+    AddDataref("sim/cockpit2/switches/taxi_light_on", "Taxi light switch", DatarefType::Int);
+    
+    // TCAS and traffic
+    AddDataref("sim/cockpit2/tcas/indicators/tcas_num_acf", "Number of TCAS targets", DatarefType::Int);
+    
+    // Enhanced autopilot status
+    AddDataref("sim/cockpit2/autopilot/fms_vnav", "FMS VNAV mode", DatarefType::Int);
+    AddDataref("sim/cockpit2/autopilot/approach_status", "Approach status: 0=off 1=armed 2=captured", DatarefType::Int);
+    AddDataref("sim/cockpit2/autopilot/nav_status", "Nav status: 0=off 1=armed 2=captured", DatarefType::Int);
+    
+    // System failures monitoring
+    AddDataref("sim/operation/failures/rel_servo_ailn", "Autopilot servo failed - ailerons", DatarefType::Int);
+    AddDataref("sim/operation/failures/rel_servo_elev", "Autopilot servo failed - elevators", DatarefType::Int);
+    AddDataref("sim/operation/failures/rel_servo_rudd", "Autopilot servo failed - rudder", DatarefType::Int);
+    AddDataref("sim/operation/failures/rel_ss_dgy", "Directional gyro failure", DatarefType::Int);
+    AddDataref("sim/operation/failures/rel_ss_ahz", "Artificial horizon failure", DatarefType::Int);
+    AddDataref("sim/operation/failures/rel_ss_asi", "Airspeed indicator failure", DatarefType::Int);
+    AddDataref("sim/operation/failures/rel_ss_alt", "Altimeter failure", DatarefType::Int);
+    
+    // Engine extended parameters
+    AddDataref("sim/flightmodel2/engines/thrust_reverser_deploy_ratio", "Thrust reverser position", DatarefType::Float, MAX_ENGINES);
+    AddDataref("sim/flightmodel2/engines/engine_is_burning_fuel", "Engine burning fuel status", DatarefType::Int, MAX_ENGINES);
+    
+    // Control trim settings
+    AddDataref("sim/cockpit2/controls/elevator_trim", "Elevator trim", DatarefType::Float);
+    AddDataref("sim/cockpit2/controls/aileron_trim", "Aileron trim", DatarefType::Float);
+    AddDataref("sim/cockpit2/controls/rudder_trim", "Rudder trim", DatarefType::Float);
+    
+    // GPS navigation indicators
+    AddDataref("sim/cockpit2/radios/indicators/gps_dme_distance_nm", "GPS DME distance", DatarefType::Float);
+    AddDataref("sim/cockpit2/radios/indicators/gps_hdef_dots_pilot", "GPS HDEF dots pilot", DatarefType::Float);
+    AddDataref("sim/cockpit2/radios/actuators/gps_course_degtm", "GPS course", DatarefType::Float);
+    AddDataref("sim/cockpit2/radios/indicators/gps_vdef_dots_pilot", "GPS VDEF dots pilot", DatarefType::Float);
+    
+    // Weight and CG information
+    AddDataref("sim/flightmodel/weight/m_fixed", "Payload weight", DatarefType::Float);
+    AddDataref("sim/flightmodel/weight/m_jettison", "Jettisoned weight", DatarefType::Float);
+    AddDataref("sim/flightmodel/misc/cgz_ref_to_default", "CG position longitudinal", DatarefType::Float);
+    
+    // Performance metrics
+    AddDataref("sim/flightmodel/position/local_vx", "Local velocity X", DatarefType::Float);
+    AddDataref("sim/flightmodel/position/local_vy", "Local velocity Y", DatarefType::Float);
+    AddDataref("sim/flightmodel/position/local_vz", "Local velocity Z", DatarefType::Float);
+    AddDataref("sim/flightmodel2/position/mag_psi", "Magnetic heading", DatarefType::Float);
+    
+    // Replay mode detection
+    AddDataref("sim/time/is_in_replay", "In replay mode", DatarefType::Int);
+    
+    // Weather information
+    AddDataref("sim/weather/visibility_reported_m", "Visibility in meters", DatarefType::Float);
+    AddDataref("sim/weather/cloud_base_msl_m", "Cloud base MSL", DatarefType::Float, 3);
+    AddDataref("sim/weather/cloud_coverage", "Cloud coverage", DatarefType::Float, 3);
+    AddDataref("sim/weather/cloud_type", "Cloud type", DatarefType::Int, 3);
+    AddDataref("sim/weather/temperature_sealevel_c", "Temperature at sea level", DatarefType::Float);
+    AddDataref("sim/weather/temperature_ambient_c", "Ambient temperature", DatarefType::Float);
+    
+    // Pressurization controls
+    AddDataref("sim/cockpit2/pressurization/actuators/safety_valve", "Safety valve position", DatarefType::Float);
+    AddDataref("sim/cockpit2/pressurization/actuators/dump_all", "Dump all valve", DatarefType::Float);
+    
+    // Additional engine parameters
+    AddDataref("sim/flightmodel2/engines/fuel_flow_kg_sec", "Fuel flow kg/sec", DatarefType::Float, MAX_ENGINES);
+    AddDataref("sim/flightmodel2/engines/nacelle_temp_c", "Nacelle temperature", DatarefType::Float, MAX_ENGINES);
 }
 
 void DatarefManager::ReadCurrentValues() {
