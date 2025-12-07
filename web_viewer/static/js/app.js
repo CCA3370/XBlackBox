@@ -18,8 +18,9 @@ const state = {
     ]
 };
 
-// API Functions
-const api = {
+// API Functions - use the Tauri-compatible API from tauri-api.js
+const api = window.xdrApi || {
+    // Fallback API for direct web mode (should not be used in Tauri)
     async uploadFile(file) {
         const formData = new FormData();
         formData.append('file', file);
@@ -88,8 +89,13 @@ const api = {
             body: JSON.stringify({ start, count })
         });
         return response.json();
+    },
+
+    async openFileDialog() {
+        return null;
     }
 };
+
 
 // Error types for better messaging
 const ErrorTypes = {
@@ -1064,8 +1070,24 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.setAttribute('data-theme', savedTheme);
     document.querySelector('#btn-theme i').className = savedTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
 
-    // Modal controls - Top bar Open button (always works)
-    document.getElementById('btn-open').addEventListener('click', () => ui.showModal('file-modal'));
+    // Modal controls - Top bar Open button
+    document.getElementById('btn-open').addEventListener('click', async () => {
+        if (window.isTauri) {
+            // Use Tauri file dialog
+            try {
+                const filePath = await api.openFileDialog();
+                if (filePath) {
+                    await handlers.loadPath(filePath);
+                }
+            } catch (error) {
+                console.error('Error opening file dialog:', error);
+                ui.showError(error.message || 'Failed to open file dialog');
+            }
+        } else {
+            // Use modal for web mode
+            ui.showModal('file-modal');
+        }
+    });
     document.getElementById('close-modal').addEventListener('click', () => ui.hideModal('file-modal'));
 
     // File Info Panel click - only works when no file is loaded
