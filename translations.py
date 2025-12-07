@@ -459,12 +459,12 @@ TRANSLATIONS = {
         # Plot labels
         'plot_time': '时间（秒）',
         'plot_value': '值',
-        'plot_rate': '変化率',
-        'plot_frequency': '周波数 (Hz)',
-        'plot_magnitude': '大きさ',
-        'plot_longitude': '経度',
-        'plot_latitude': '緯度',
-        'plot_altitude': '高度 (フィート)',
+        'plot_rate': '变化率',
+        'plot_frequency': '频率 (Hz)',
+        'plot_magnitude': '幅度',
+        'plot_longitude': '经度',
+        'plot_latitude': '纬度',
+        'plot_altitude': '高度 (英尺)',
     },
     'ja_JP': {
         # Window title
