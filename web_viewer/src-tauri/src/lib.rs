@@ -302,6 +302,8 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
                     start_time: frame.timestamp,
                     end_time: frame.timestamp,
                     duration: 0.0,
+                    average_altitude: None,
+                    average_speed: None,
                 });
             } else if in_flight && alt < ALTITUDE_THRESHOLD_AGL && i > total_frames / 2 {
                 // Landing detected - only in second half of flight to avoid false positives during takeoff
@@ -316,6 +318,8 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
                     start_time: landing_start,
                     end_time: landing_start,
                     duration: 0.0,
+                    average_altitude: None,
+                    average_speed: None,
                 });
                 
                 // Continue to find landing end and calculate duration
