@@ -3,6 +3,7 @@
 #include "common.h"
 #include "Settings.h"
 #include "Recorder.h"
+#include "DatarefManager.h"
 
 class UIManager {
 public:
@@ -21,6 +22,9 @@ public:
     // Draw UI (called every frame)
     void Draw();
     
+    // Render ImGui (called from draw callback)
+    void RenderImGui();
+    
 private:
     UIManager();
     ~UIManager() = default;
@@ -30,6 +34,12 @@ private:
     // Menu management
     void CreateMenu();
     void UpdateMenu();
+    
+    // ImGui management
+    void InitImGui();
+    void CleanupImGui();
+    void CreateImGuiWindow();
+    void UpdateImGuiInputs();
     
     // Menu callbacks
     static void MenuCallback_AutoMode(void* menuRef, void* itemRef);
@@ -46,6 +56,7 @@ private:
     
     // ImGui windows
     void DrawStatusWindow();
+    void ToggleStatusWindow();
     
     // Helper for opening output folder
     void OpenOutputFolder();
@@ -58,6 +69,10 @@ private:
     
     // UI state
     bool m_showStatusWindow;
+    
+    // ImGui state
+    bool m_imguiInitialized;
+    XPLMWindowID m_imguiWindow;
     
     // Notification system
     void ShowNotification(const std::string& message);

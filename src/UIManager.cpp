@@ -1,4 +1,6 @@
 #include "UIManager.h"
+#include "XPLMGraphics.h"
+#include <cstring>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -8,6 +10,13 @@
 #else
 #include <stdlib.h>
 #endif
+
+// Forward declarations for window callbacks
+static void StatusWindowDraw(XPLMWindowID inWindowID, void* inRefcon);
+static int StatusWindowClick(XPLMWindowID inWindowID, int x, int y, XPLMMouseStatus status, void* inRefcon);
+static void StatusWindowKey(XPLMWindowID inWindowID, char key, XPLMKeyFlags flags, char vkey, void* inRefcon, int losingFocus);
+static XPLMCursorStatus StatusWindowCursor(XPLMWindowID inWindowID, int x, int y, void* inRefcon);
+static int StatusWindowWheel(XPLMWindowID inWindowID, int x, int y, int wheel, int clicks, void* inRefcon);
 
 UIManager& UIManager::Instance() {
     static UIManager instance;
@@ -20,15 +29,20 @@ UIManager::UIManager()
     , m_menuItem_StartStop(-1)
     , m_menuItem_ShowStatus(-1)
     , m_showStatusWindow(false)
-    , m_notificationTime(0.0f) {
+    , m_notificationTime(0.0f)
+    , m_imguiInitialized(false)
+    , m_imguiWindow(nullptr) {
 }
 
 void UIManager::Init() {
     CreateMenu();
+    InitImGui();
     LogInfo("UI initialized");
 }
 
 void UIManager::Cleanup() {
+    CleanupImGui();
+    
     if (m_menuID) {
         XPLMDestroyMenu(m_menuID);
         m_menuID = nullptr;
@@ -45,17 +59,9 @@ void UIManager::Update() {
 }
 
 void UIManager::Draw() {
-    // Draw status window if visible
-    if (m_showStatusWindow) {
-        DrawStatusWindow();
-    }
-    
-    // Draw notification if active
-    if (m_notificationTime > 0.0f && !m_notificationMessage.empty()) {
-        // Simple text notification (could be enhanced with ImGui)
-        // For now, we'll just use X-Plane's debug string
-        // In a full implementation, we'd draw an ImGui notification
-    }
+    // ImGui drawing is handled in the draw callback
+    // This function is kept for compatibility but actual drawing
+    // happens in ImGuiDrawCallback
 }
 
 void UIManager::CreateMenu() {
@@ -189,7 +195,7 @@ void UIManager::MenuCallback_AutoMode(void* menuRef, void* itemRef) {
     }
     // Show status
     else if (item == 2) {
-        UIManager::Instance().m_showStatusWindow = !UIManager::Instance().m_showStatusWindow;
+        UIManager::Instance().ToggleStatusWindow();
     }
     // Open folder
     else if (item == 3) {
@@ -306,4 +312,199 @@ void UIManager::OpenOutputFolder() {
 #endif
     
     ShowNotification("Opening output folder");
+}
+
+// Status window using X-Plane native API
+void UIManager::InitImGui() {
+    // We use X-Plane's native window API instead of ImGui for better compatibility
+    m_imguiInitialized = true;
+    LogInfo("Native window system initialized");
+}
+
+void UIManager::CleanupImGui() {
+    if (m_imguiWindow) {
+        XPLMDestroyWindow(m_imguiWindow);
+        m_imguiWindow = nullptr;
+    }
+    m_imguiInitialized = false;
+}
+
+void UIManager::CreateImGuiWindow() {
+    if (m_imguiWindow) {
+        // Window already exists, just show it
+        XPLMSetWindowIsVisible(m_imguiWindow, 1);
+        return;
+    }
+    
+    // Get screen bounds
+    int screenLeft, screenTop, screenRight, screenBottom;
+    XPLMGetScreenBoundsGlobal(&screenLeft, &screenTop, &screenRight, &screenBottom);
+    
+    // Create a window in the center of the screen
+    int winWidth = 350;
+    int winHeight = 200;
+    int left = screenLeft + (screenRight - screenLeft - winWidth) / 2;
+    int top = screenTop - 100;
+    int right = left + winWidth;
+    int bottom = top - winHeight;
+    
+    // Create window parameters
+    XPLMCreateWindow_t params;
+    memset(&params, 0, sizeof(params));
+    params.structSize = sizeof(params);
+    params.left = left;
+    params.top = top;
+    params.right = right;
+    params.bottom = bottom;
+    params.visible = 1;
+    params.drawWindowFunc = StatusWindowDraw;
+    params.handleMouseClickFunc = StatusWindowClick;
+    params.handleKeyFunc = StatusWindowKey;
+    params.handleCursorFunc = StatusWindowCursor;
+    params.handleMouseWheelFunc = StatusWindowWheel;
+    params.refcon = this;
+    params.decorateAsFloatingWindow = xplm_WindowDecorationRoundRectangle;
+    params.layer = xplm_WindowLayerFloatingWindows;
+    params.handleRightClickFunc = StatusWindowClick;
+    
+    m_imguiWindow = XPLMCreateWindowEx(&params);
+    
+    if (m_imguiWindow) {
+        XPLMSetWindowTitle(m_imguiWindow, "XBlackBox Status");
+        XPLMSetWindowResizingLimits(m_imguiWindow, 300, 150, 500, 400);
+    }
+}
+
+void UIManager::UpdateImGuiInputs() {
+    // Not needed for native windows
+}
+
+void UIManager::RenderImGui() {
+    // Not needed - native windows handle their own drawing
+}
+
+void UIManager::DrawStatusWindow() {
+    // This is called from the native window draw callback
+    // Drawing is handled in StatusWindowDraw
+}
+
+// Toggle status window visibility
+void UIManager::ToggleStatusWindow() {
+    m_showStatusWindow = !m_showStatusWindow;
+    
+    if (m_showStatusWindow) {
+        CreateImGuiWindow();
+    } else if (m_imguiWindow) {
+        XPLMSetWindowIsVisible(m_imguiWindow, 0);
+    }
+}
+
+// Native window callbacks
+static void StatusWindowDraw(XPLMWindowID inWindowID, void* inRefcon) {
+    (void)inRefcon;
+    
+    // Get window geometry
+    int left, top, right, bottom;
+    XPLMGetWindowGeometry(inWindowID, &left, &top, &right, &bottom);
+    
+    // Set up drawing color (white text)
+    float white[] = {1.0f, 1.0f, 1.0f};
+    float green[] = {0.0f, 1.0f, 0.0f};
+    float red[] = {1.0f, 0.3f, 0.3f};
+    float yellow[] = {1.0f, 1.0f, 0.3f};
+    
+    int x = left + 10;
+    int y = top - 25;
+    int lineHeight = 18;
+    
+    // Title
+    XPLMDrawString(white, x, y, (char*)"=== XBlackBox Status ===", nullptr, xplmFont_Proportional);
+    y -= lineHeight + 5;
+    
+    // Recording status
+    bool isRecording = Recorder::Instance().IsRecording();
+    char buffer[256];
+    
+    snprintf(buffer, sizeof(buffer), "Recording: %s", isRecording ? "YES" : "NO");
+    XPLMDrawString(isRecording ? green : red, x, y, buffer, nullptr, xplmFont_Proportional);
+    y -= lineHeight;
+    
+    // Auto mode
+    bool autoMode = Settings::Instance().GetAutoMode();
+    snprintf(buffer, sizeof(buffer), "Auto Mode: %s", autoMode ? "ON" : "OFF");
+    XPLMDrawString(autoMode ? green : yellow, x, y, buffer, nullptr, xplmFont_Proportional);
+    y -= lineHeight;
+    
+    // Recording level
+    snprintf(buffer, sizeof(buffer), "Level: %s", Settings::Instance().GetRecordingLevelName().c_str());
+    XPLMDrawString(white, x, y, buffer, nullptr, xplmFont_Proportional);
+    y -= lineHeight;
+    
+    // Recording interval
+    snprintf(buffer, sizeof(buffer), "Interval: %.2f Hz", 1.0f / Settings::Instance().GetRecordingInterval());
+    XPLMDrawString(white, x, y, buffer, nullptr, xplmFont_Proportional);
+    y -= lineHeight;
+    
+    // If recording, show additional stats
+    if (isRecording) {
+        y -= 5;  // Extra spacing
+        XPLMDrawString(white, x, y, (char*)"--- Recording Stats ---", nullptr, xplmFont_Proportional);
+        y -= lineHeight;
+        
+        snprintf(buffer, sizeof(buffer), "Records: %d", Recorder::Instance().GetRecordCount());
+        XPLMDrawString(green, x, y, buffer, nullptr, xplmFont_Proportional);
+        y -= lineHeight;
+        
+        snprintf(buffer, sizeof(buffer), "Duration: %d sec", Recorder::Instance().GetDuration());
+        XPLMDrawString(green, x, y, buffer, nullptr, xplmFont_Proportional);
+        y -= lineHeight;
+        
+        snprintf(buffer, sizeof(buffer), "Bytes: %zu", Recorder::Instance().GetBytesWritten());
+        XPLMDrawString(green, x, y, buffer, nullptr, xplmFont_Proportional);
+        y -= lineHeight;
+        
+        // Truncate file path if too long
+        std::string filePath = Recorder::Instance().GetCurrentFilePath();
+        if (filePath.length() > 40) {
+            filePath = "..." + filePath.substr(filePath.length() - 37);
+        }
+        snprintf(buffer, sizeof(buffer), "File: %s", filePath.c_str());
+        XPLMDrawString(white, x, y, buffer, nullptr, xplmFont_Proportional);
+    }
+}
+
+static int StatusWindowClick(XPLMWindowID inWindowID, int x, int y, XPLMMouseStatus status, void* inRefcon) {
+    (void)inWindowID;
+    (void)x;
+    (void)y;
+    (void)status;
+    (void)inRefcon;
+    return 1;  // Consume the click
+}
+
+static void StatusWindowKey(XPLMWindowID inWindowID, char key, XPLMKeyFlags flags, char vkey, void* inRefcon, int losingFocus) {
+    (void)inWindowID;
+    (void)key;
+    (void)flags;
+    (void)vkey;
+    (void)inRefcon;
+    (void)losingFocus;
+}
+
+static XPLMCursorStatus StatusWindowCursor(XPLMWindowID inWindowID, int x, int y, void* inRefcon) {
+    (void)inWindowID;
+    (void)x;
+    (void)y;
+    (void)inRefcon;
+    return xplm_CursorDefault;
+}
+
+static int StatusWindowWheel(XPLMWindowID inWindowID, int x, int y, int wheel, int clicks, void* inRefcon) {
+    (void)inWindowID;
+    (void)x;
+    (void)y;
+    (void)wheel;
+    (void)clicks;
+    (void)inRefcon;
+    return 1;  // Consume the wheel event
 }

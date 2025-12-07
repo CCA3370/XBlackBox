@@ -20,16 +20,11 @@ endif()
 set(XPLM_SDK_PATH "${CMAKE_SOURCE_DIR}/SDK/CHeaders/XPLM")
 set(WIDGETS_SDK_PATH "${CMAKE_SOURCE_DIR}/SDK/CHeaders/Widgets")
 
-# ImGui paths
-set(IMGUI_PATH "${CMAKE_SOURCE_DIR}/SDK/imgui-1.92.5")
-
 # Include directories
 include_directories(
     ${CMAKE_SOURCE_DIR}/include
     ${XPLM_SDK_PATH}
     ${WIDGETS_SDK_PATH}
-    ${IMGUI_PATH}
-    ${IMGUI_PATH}/backends
 )
 
 # Source files
@@ -39,16 +34,6 @@ set(SOURCES
     src/Recorder.cpp
     src/Settings.cpp
     src/UIManager.cpp
-    
-    # ImGui core
-    ${IMGUI_PATH}/imgui.cpp
-    ${IMGUI_PATH}/imgui_demo.cpp
-    ${IMGUI_PATH}/imgui_draw.cpp
-    ${IMGUI_PATH}/imgui_tables.cpp
-    ${IMGUI_PATH}/imgui_widgets.cpp
-    
-    # ImGui backend for X-Plane (we'll use OpenGL3)
-    ${IMGUI_PATH}/backends/imgui_impl_opengl3.cpp
 )
 
 # Header files
@@ -81,12 +66,10 @@ if(WIN32)
     target_link_libraries(XBlackBox
         ${CMAKE_SOURCE_DIR}/SDK/Libraries/Win/XPLM_64.lib
         ${CMAKE_SOURCE_DIR}/SDK/Libraries/Win/XPWidgets_64.lib
-        opengl32
     )
 elseif(APPLE)
     target_compile_definitions(XBlackBox PRIVATE APL=1 XPLM420=1 XPLM400=1 XPLM301=1 XPLM300=1 XPLM210=1 XPLM200=1)
     target_link_libraries(XBlackBox
-        "-framework OpenGL"
         "-framework CoreFoundation"
     )
     set_target_properties(XBlackBox PROPERTIES
@@ -94,12 +77,6 @@ elseif(APPLE)
     )
 else()
     target_compile_definitions(XBlackBox PRIVATE LIN=1 XPLM420=1 XPLM400=1 XPLM301=1 XPLM300=1 XPLM210=1 XPLM200=1)
-    find_library(OPENGL_LIBRARY NAMES GL PATHS /usr/lib/x86_64-linux-gnu /usr/lib)
-    if(OPENGL_LIBRARY)
-        target_link_libraries(XBlackBox ${OPENGL_LIBRARY})
-    else()
-        message(STATUS "OpenGL library not found, plugin may not link correctly")
-    endif()
 endif()
 
 # Compiler flags

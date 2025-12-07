@@ -21,9 +21,6 @@
 #include "XPLMMenus.h"
 #include "XPLMDisplay.h"
 
-// ImGui
-#include "imgui.h"
-
 // Constants
 constexpr int MAX_ENGINES = 8;
 constexpr int MAX_BATTERIES = 8;

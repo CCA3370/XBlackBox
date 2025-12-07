@@ -99,9 +99,8 @@ static float FlightLoopCallback(float elapsedMe, float elapsedSim, int counter, 
     // Update recorder
     Recorder::Instance().Update(elapsedSim);
     
-    // Update UI
+    // Update UI (ImGui rendering is handled via XPLMRegisterDrawCallback)
     UIManager::Instance().Update();
-    UIManager::Instance().Draw();
     
     // Return -1 to be called every frame
     return -1.0f;
