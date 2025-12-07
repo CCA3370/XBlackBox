@@ -54,9 +54,11 @@ private:
     static void MenuCallback_ShowStatus(void* menuRef, void* itemRef);
     static void MenuCallback_OpenFolder(void* menuRef, void* itemRef);
     
-    // ImGui windows
+    // Windows
     void DrawStatusWindow();
     void ToggleStatusWindow();
+    void ToggleSettingsWindow();
+    void CreateSettingsWindow();
     
     // Helper for opening output folder
     void OpenOutputFolder();
@@ -66,13 +68,16 @@ private:
     int m_menuItem_AutoMode;
     int m_menuItem_StartStop;
     int m_menuItem_ShowStatus;
+    int m_menuItem_Settings;
     
     // UI state
     bool m_showStatusWindow;
+    bool m_showSettingsWindow;
     
-    // ImGui state
+    // Window state
     bool m_imguiInitialized;
     XPLMWindowID m_imguiWindow;
+    XPLMWindowID m_settingsWindow;
     
     // Notification system
     void ShowNotification(const std::string& message);
