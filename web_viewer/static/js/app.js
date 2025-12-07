@@ -59,13 +59,13 @@ const api = window.xdrApi || {
         return response.json();
     },
 
-    async getFFT(param) {
-        const response = await fetch('/api/fft', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ index: param.index, array_index: param.array_index || 0 })
-        });
-        return response.json();
+    async analyzeFlight() {
+        if (isTauri) {
+            return await tauriApi.invoke('analyze_flight');
+        } else {
+            const response = await fetch('/api/analyze-flight');
+            return response.json();
+        }
     },
 
     async getCorrelation(params) {
@@ -390,16 +390,94 @@ function clearAllParams() {
     ui.updateSelectionCount();
 }
 
-function updateFFTSelect() {
-    const select = document.getElementById('fft-param-select');
-    select.innerHTML = '<option value="">-- Select parameter --</option>';
+// Flight Analysis Functions
+async function loadFlightAnalysis() {
+    const container = document.getElementById('flight-analysis-results');
     
-    state.selectedParams.forEach((param, idx) => {
-        const option = document.createElement('option');
-        option.value = idx;
-        option.textContent = param.name;
-        select.appendChild(option);
-    });
+    if (!state.fileLoaded) {
+        container.innerHTML = `
+            <div class="plot-placeholder">
+                <i class="fas fa-plane-departure"></i>
+                <p>Load a file first to analyze flight data</p>
+            </div>
+        `;
+        return;
+    }
+
+    ui.showLoading('Analyzing flight phases...');
+
+    try {
+        const result = await api.analyzeFlight();
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        let html = '<div class="analysis-summary">';
+        html += '<h4><i class="fas fa-info-circle"></i> Flight Summary</h4>';
+        html += '<div class="stats-grid">';
+        html += `<div class="stat-item">
+            <span class="stat-label">Total Flight Time</span>
+            <span class="stat-value">${(result.total_flight_time / 60).toFixed(1)} min</span>
+        </div>`;
+        html += `<div class="stat-item">
+            <span class="stat-label">Max Altitude</span>
+            <span class="stat-value">${result.max_altitude.toFixed(0)} ft</span>
+        </div>`;
+        html += `<div class="stat-item">
+            <span class="stat-label">Max Speed</span>
+            <span class="stat-value">${result.max_speed.toFixed(1)} kts</span>
+        </div>`;
+        
+        if (result.average_fuel_flow) {
+            html += `<div class="stat-item">
+                <span class="stat-label">Avg Fuel Flow</span>
+                <span class="stat-value">${result.average_fuel_flow.toFixed(2)} lbs/hr</span>
+            </div>`;
+        }
+        
+        if (result.landing_g_force) {
+            html += `<div class="stat-item">
+                <span class="stat-label">Landing G-Force</span>
+                <span class="stat-value">${result.landing_g_force.toFixed(2)}G</span>
+            </div>`;
+        }
+        
+        html += '</div></div>';
+
+        if (result.phases && result.phases.length > 0) {
+            html += '<div class="analysis-phases">';
+            html += '<h4><i class="fas fa-list"></i> Flight Phases</h4>';
+            html += '<table class="phases-table">';
+            html += '<thead><tr><th>Phase</th><th>Start Time</th><th>Duration</th></tr></thead>';
+            html += '<tbody>';
+            
+            result.phases.forEach(phase => {
+                const startMin = (phase.start_time / 60).toFixed(1);
+                const durationSec = phase.duration.toFixed(0);
+                html += `<tr>
+                    <td><strong>${phase.name}</strong></td>
+                    <td>${startMin} min</td>
+                    <td>${durationSec}s</td>
+                </tr>`;
+            });
+            
+            html += '</tbody></table>';
+            html += '</div>';
+        }
+
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Flight analysis error:', error);
+        container.innerHTML = `
+            <div class="plot-placeholder">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Analysis error: ${error.message}</p>
+            </div>
+        `;
+    } finally {
+        ui.hideLoading();
+    }
 }
 
 // Plotting Functions (using Plotly)
@@ -547,78 +625,6 @@ async function loadStatistics() {
     } catch (error) {
         console.error('Statistics error:', error);
         container.innerHTML = `<tr><td colspan="8" style="text-align:center">Error: ${error.message}</td></tr>`;
-    } finally {
-        ui.hideLoading();
-    }
-}
-
-// FFT Functions
-async function loadFFT() {
-    const container = document.getElementById('fft-plot');
-    const select = document.getElementById('fft-param-select');
-    const selectedIdx = select.value;
-    
-    if (selectedIdx === '' || state.selectedParams.length === 0) {
-        container.innerHTML = `
-            <div class="plot-placeholder">
-                <i class="fas fa-wave-square"></i>
-                <p>Select a parameter to analyze frequencies</p>
-            </div>
-        `;
-        return;
-    }
-
-    const param = state.selectedParams[parseInt(selectedIdx)];
-    document.getElementById('fft-info').textContent = `Analyzing: ${param.name}`;
-
-    ui.showLoading('Calculating FFT...');
-
-    try {
-        const result = await api.getFFT(param);
-        
-        if (result.error) {
-            throw new Error(result.error);
-        }
-
-        const trace = {
-            x: result.frequencies,
-            y: result.magnitudes,
-            type: 'scatter',
-            mode: 'lines',
-            fill: 'tozeroy',
-            line: { color: state.colors[0] }
-        };
-
-        const layout = {
-            paper_bgcolor: 'transparent',
-            plot_bgcolor: 'transparent',
-            font: { color: getComputedStyle(document.body).getPropertyValue('--text-primary') },
-            xaxis: {
-                title: 'Frequency (Hz)',
-                showgrid: true,
-                gridcolor: getComputedStyle(document.body).getPropertyValue('--border-color')
-            },
-            yaxis: {
-                title: 'Magnitude',
-                showgrid: true,
-                gridcolor: getComputedStyle(document.body).getPropertyValue('--border-color')
-            },
-            margin: { l: 60, r: 30, t: 30, b: 60 },
-            transition: {
-                duration: 500,
-                easing: 'cubic-in-out'
-            }
-        };
-
-        Plotly.newPlot(container, [trace], layout, { responsive: true });
-    } catch (error) {
-        console.error('FFT error:', error);
-        container.innerHTML = `
-            <div class="plot-placeholder">
-                <i class="fas fa-exclamation-triangle"></i>
-                <p>FFT error: ${error.message}</p>
-            </div>
-        `;
     } finally {
         ui.hideLoading();
     }
@@ -1203,8 +1209,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Statistics
     document.getElementById('btn-calc-stats').addEventListener('click', loadStatistics);
 
-    // FFT
-    document.getElementById('btn-calc-fft').addEventListener('click', loadFFT);
+    // Flight Analysis
+    document.getElementById('btn-analyze-flight').addEventListener('click', loadFlightAnalysis);
 
     // Correlation
     document.getElementById('btn-calc-corr').addEventListener('click', loadCorrelation);

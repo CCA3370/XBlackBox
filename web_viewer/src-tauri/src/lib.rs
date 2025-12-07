@@ -48,18 +48,6 @@ struct GetStatisticsRequest {
 }
 
 #[derive(Debug, Deserialize)]
-struct GetFftRequest {
-    index: usize,
-    array_index: usize,
-}
-
-#[derive(Debug, Serialize)]
-struct FftResponse {
-    frequencies: Vec<f64>,
-    magnitudes: Vec<f64>,
-}
-
-#[derive(Debug, Deserialize)]
 struct GetCorrelationRequest {
     parameters: Vec<xdr::Parameter>,
 }
@@ -193,35 +181,153 @@ async fn get_statistics(
     Ok(result)
 }
 
+#[derive(Debug, Serialize)]
+struct FlightPhase {
+    name: String,
+    start_time: f32,
+    end_time: f32,
+    duration: f32,
+}
+
+#[derive(Debug, Serialize)]
+struct FlightAnalysis {
+    phases: Vec<FlightPhase>,
+    total_flight_time: f32,
+    max_altitude: f64,
+    max_speed: f64,
+    average_fuel_flow: Option<f64>,
+    landing_g_force: Option<f64>,
+}
+
 #[tauri::command]
-async fn get_fft(
-    request: GetFftRequest,
-    state: State<'_, AppState>,
-) -> Result<FftResponse, String> {
+async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, String> {
     let data_guard = state.xdr_data.lock().unwrap();
     let data = data_guard
         .as_ref()
         .ok_or_else(|| "No file loaded".to_string())?;
 
-    let (_, values) = data.get_parameter_data(request.index, request.array_index, None, 1);
-
-    if values.len() < 4 {
-        return Ok(FftResponse {
-            frequencies: vec![],
-            magnitudes: vec![],
-        });
+    if data.frames.is_empty() {
+        return Err("No flight data available".to_string());
     }
 
-    // NOTE: FFT implementation not included in initial version
-    // To add FFT support, include the rustfft crate and implement:
-    // 1. De-mean the data
-    // 2. Apply window function (Hanning)
-    // 3. Compute FFT
-    // 4. Calculate magnitude spectrum
-    // For now, return empty arrays to maintain API compatibility
-    Ok(FftResponse {
-        frequencies: vec![],
-        magnitudes: vec![],
+    // Find altitude and speed datarefs
+    let mut alt_idx = None;
+    let mut speed_idx = None;
+    let mut vspeed_idx = None;
+    let mut fuel_flow_idx = None;
+    let mut g_force_idx = None;
+
+    for (i, dr) in data.datarefs.iter().enumerate() {
+        let name = dr.name.to_lowercase();
+        if name.contains("altitude") && name.contains("agl") {
+            alt_idx = Some(i);
+        } else if name.contains("groundspeed") || name.contains("ground_speed") {
+            speed_idx = Some(i);
+        } else if name.contains("vvi") || name.contains("vertical_speed") {
+            vspeed_idx = Some(i);
+        } else if name.contains("fuel_flow") {
+            fuel_flow_idx = Some(i);
+        } else if name.contains("g_nrml") || name.contains("g_load") {
+            g_force_idx = Some(i);
+        }
+    }
+
+    let mut phases = Vec::new();
+    let mut max_altitude = 0.0;
+    let mut max_speed = 0.0;
+    let mut fuel_flow_sum = 0.0;
+    let mut fuel_flow_count = 0;
+    let mut landing_g = None;
+
+    // Get altitude and speed data if available
+    if let Some(alt_i) = alt_idx {
+        let (_, altitudes) = data.get_parameter_data(alt_i, 0, None, 1);
+        max_altitude = altitudes.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        
+        // Detect flight phases based on altitude
+        let mut in_flight = false;
+        let mut phase_start = 0.0;
+        
+        for (i, frame) in data.frames.iter().enumerate() {
+            let alt = if alt_i < frame.values.len() {
+                match &frame.values[alt_i] {
+                    xdr::DataValue::Float(v) => *v as f64,
+                    xdr::DataValue::Int(v) => *v as f64,
+                    _ => 0.0,
+                }
+            } else {
+                0.0
+            };
+
+            if !in_flight && alt > 10.0 {
+                // Takeoff detected
+                in_flight = true;
+                phase_start = frame.timestamp;
+                phases.push(FlightPhase {
+                    name: "Takeoff".to_string(),
+                    start_time: frame.timestamp,
+                    end_time: frame.timestamp,
+                    duration: 0.0,
+                });
+            } else if in_flight && alt < 10.0 && i > data.frames.len() / 2 {
+                // Landing detected
+                if let Some(last_phase) = phases.last_mut() {
+                    last_phase.end_time = frame.timestamp;
+                    last_phase.duration = frame.timestamp - last_phase.start_time;
+                }
+                phases.push(FlightPhase {
+                    name: "Landing".to_string(),
+                    start_time: frame.timestamp,
+                    end_time: frame.timestamp,
+                    duration: 0.0,
+                });
+                in_flight = false;
+                
+                // Record landing G-force if available
+                if let Some(g_i) = g_force_idx {
+                    if g_i < frame.values.len() {
+                        if let xdr::DataValue::Float(v) = &frame.values[g_i] {
+                            landing_g = Some(*v as f64);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Calculate max speed
+    if let Some(spd_i) = speed_idx {
+        let (_, speeds) = data.get_parameter_data(spd_i, 0, None, 1);
+        max_speed = speeds.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    }
+
+    // Calculate average fuel flow
+    let average_fuel_flow = if let Some(ff_i) = fuel_flow_idx {
+        let (_, fuel_flows) = data.get_parameter_data(ff_i, 0, None, 1);
+        if !fuel_flows.is_empty() {
+            fuel_flow_sum = fuel_flows.iter().sum();
+            fuel_flow_count = fuel_flows.len();
+            Some(fuel_flow_sum / fuel_flow_count as f64)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let total_time = if !data.frames.is_empty() {
+        data.frames.last().unwrap().timestamp - data.frames.first().unwrap().timestamp
+    } else {
+        0.0
+    };
+
+    Ok(FlightAnalysis {
+        phases,
+        total_flight_time: total_time,
+        max_altitude,
+        max_speed,
+        average_fuel_flow,
+        landing_g_force: landing_g,
     })
 }
 
@@ -359,7 +465,7 @@ pub fn run() {
             load_file,
             get_data,
             get_statistics,
-            get_fft,
+            analyze_flight,
             get_correlation,
             get_flight_path,
             get_table_data,

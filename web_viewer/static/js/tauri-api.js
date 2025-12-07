@@ -91,20 +91,11 @@ const api = {
         }
     },
 
-    async getFFT(param) {
+    async analyzeFlight() {
         if (isTauri) {
-            return await tauriApi.invoke('get_fft', {
-                request: {
-                    index: param.index,
-                    array_index: param.array_index || 0
-                }
-            });
+            return await tauriApi.invoke('analyze_flight');
         } else {
-            const response = await fetch('/api/fft', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ index: param.index, array_index: param.array_index || 0 })
-            });
+            const response = await fetch('/api/analyze-flight');
             return response.json();
         }
     },
