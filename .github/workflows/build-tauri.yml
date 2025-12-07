@@ -1,0 +1,89 @@
+name: Build Tauri Viewer
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-tauri:
+    name: Build Tauri ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            artifact_name: xblackbox-viewer.exe
+            artifact_path: web_viewer/src-tauri/target/release/xblackbox-viewer.exe
+          - os: macos-latest
+            platform: macos
+            artifact_name: XBlackBox Viewer.app
+            artifact_path: web_viewer/src-tauri/target/release/bundle/macos/XBlackBox Viewer.app
+          - os: ubuntu-latest
+            platform: linux
+            artifact_name: xblackbox-viewer
+            artifact_path: web_viewer/src-tauri/target/release/xblackbox-viewer
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev libssl-dev
+      
+      - name: Install frontend dependencies
+        working-directory: web_viewer
+        run: npm install
+      
+      - name: Build Tauri app
+        working-directory: web_viewer
+        run: npm run build
+      
+      - name: Upload Linux artifact
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-viewer-${{ matrix.platform }}
+          path: ${{ matrix.artifact_path }}
+          retention-days: 90
+      
+      - name: Upload macOS artifact
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-viewer-${{ matrix.platform }}
+          path: ${{ matrix.artifact_path }}
+          retention-days: 90
+      
+      - name: Upload Windows artifact
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-viewer-${{ matrix.platform }}
+          path: ${{ matrix.artifact_path }}
+          retention-days: 90

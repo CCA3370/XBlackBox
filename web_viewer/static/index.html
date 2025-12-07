@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XBlackBox XDR Viewer</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+</head>
+<body>
+    <div class="app-container" id="app">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">
+                <i class="fas fa-plane"></i>
+                <span>XBlackBox Viewer</span>
+            </div>
+            <nav class="header-nav">
+                <button class="btn btn-icon" id="btn-open" title="Open File">
+                    <i class="fas fa-folder-open"></i>
+                </button>
+                <button class="btn btn-icon" id="btn-export" title="Export CSV" disabled>
+                    <i class="fas fa-download"></i>
+                </button>
+                <div class="divider"></div>
+                <button class="btn btn-icon" id="btn-refresh" title="Refresh Plot" disabled>
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <button class="btn btn-icon" id="btn-clear" title="Clear Plot" disabled>
+                    <i class="fas fa-eraser"></i>
+                </button>
+                <div class="divider"></div>
+                <div class="theme-switcher">
+                    <button class="btn btn-icon" id="btn-theme" title="Toggle Theme">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                </div>
+            </nav>
+        </header>
+
+        <!-- Main Content -->
+        <main class="app-main">
+            <!-- Sidebar -->
+            <aside class="sidebar" id="sidebar">
+                <!-- File Info Panel -->
+                <div class="panel file-info-panel" id="file-info">
+                    <div class="panel-header">
+                        <i class="fas fa-file-alt"></i>
+                        <span>File Information</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="info-placeholder">
+                            <i class="fas fa-upload"></i>
+                            <p>Drag & drop an XDR file or click Open</p>
+                        </div>
+                        <div class="file-details hidden" id="file-details">
+                            <div class="info-row">
+                                <span class="info-label">File:</span>
+                                <span class="info-value" id="info-filename">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Version:</span>
+                                <span class="info-value" id="info-version">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Level:</span>
+                                <span class="info-value" id="info-level">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Interval:</span>
+                                <span class="info-value" id="info-interval">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Start:</span>
+                                <span class="info-value" id="info-start">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Duration:</span>
+                                <span class="info-value" id="info-duration">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Frames:</span>
+                                <span class="info-value" id="info-frames">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Parameters:</span>
+                                <span class="info-value" id="info-params">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parameter Selection Panel -->
+                <div class="panel parameters-panel">
+                    <div class="panel-header">
+                        <i class="fas fa-list"></i>
+                        <span>Parameters</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="param-search" placeholder="Search parameters...">
+                        </div>
+                        <div class="param-actions">
+                            <button class="btn btn-sm" id="btn-select-all">Select All</button>
+                            <button class="btn btn-sm btn-secondary" id="btn-clear-selection">Clear</button>
+                        </div>
+                        <div class="param-list" id="param-list">
+                            <div class="param-placeholder">
+                                <p>Load a file to see parameters</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <div class="content-area">
+                <!-- Tab Navigation -->
+                <div class="tab-nav">
+                    <button class="tab-btn active" data-tab="plot">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Plot</span>
+                    </button>
+                    <button class="tab-btn" data-tab="data">
+                        <i class="fas fa-table"></i>
+                        <span>Data Table</span>
+                    </button>
+                    <button class="tab-btn" data-tab="statistics">
+                        <i class="fas fa-chart-bar"></i>
+                        <span>Statistics</span>
+                    </button>
+                    <button class="tab-btn" data-tab="flight-analysis">
+                        <i class="fas fa-plane-departure"></i>
+                        <span>Flight Analysis</span>
+                    </button>
+                    <button class="tab-btn" data-tab="correlation">
+                        <i class="fas fa-project-diagram"></i>
+                        <span>Correlation</span>
+                    </button>
+                    <button class="tab-btn" data-tab="flight-path">
+                        <i class="fas fa-route"></i>
+                        <span>3D Path</span>
+                    </button>
+                </div>
+
+                <!-- Tab Content -->
+                <div class="tab-content">
+                    <!-- Plot Tab -->
+                    <div class="tab-pane active" id="tab-plot">
+                        <div class="plot-controls">
+                            <div class="control-group">
+                                <label>Time Range:</label>
+                                <input type="number" id="time-start" value="0" step="0.1" min="0">
+                                <span>→</span>
+                                <input type="number" id="time-end" value="0" step="0.1" min="0">
+                                <button class="btn btn-sm btn-secondary" id="btn-reset-time">Reset</button>
+                            </div>
+                            <div class="control-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="opt-separate-axes">
+                                    <span>Separate Axes</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="opt-grid" checked>
+                                    <span>Grid</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="opt-derivative">
+                                    <span>Derivative</span>
+                                </label>
+                            </div>
+                            <button class="btn btn-primary" id="btn-update-plot">
+                                <i class="fas fa-sync-alt"></i>
+                                Update Plot
+                            </button>
+                        </div>
+                        <div class="plot-container" id="main-plot">
+                            <div class="plot-placeholder">
+                                <i class="fas fa-chart-area"></i>
+                                <p>Select parameters and click Update Plot</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Data Table Tab -->
+                    <div class="tab-pane" id="tab-data">
+                        <div class="table-controls">
+                            <div class="control-group">
+                                <label>Rows per page:</label>
+                                <select id="table-page-size">
+                                    <option value="50">50</option>
+                                    <option value="100" selected>100</option>
+                                    <option value="200">200</option>
+                                    <option value="500">500</option>
+                                </select>
+                            </div>
+                            <div class="pagination">
+                                <button class="btn btn-sm" id="btn-prev-page" disabled>
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <span id="page-info">Page 1 of 1</span>
+                                <button class="btn btn-sm" id="btn-next-page" disabled>
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-container" id="data-table-container">
+                            <table class="data-table" id="data-table">
+                                <thead id="table-head"></thead>
+                                <tbody id="table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Statistics Tab -->
+                    <div class="tab-pane" id="tab-statistics">
+                        <div class="stats-header">
+                            <h3><i class="fas fa-chart-bar"></i> Statistical Analysis</h3>
+                            <button class="btn btn-primary" id="btn-calc-stats">
+                                <i class="fas fa-calculator"></i>
+                                Calculate Statistics
+                            </button>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table" id="stats-table">
+                                <thead>
+                                    <tr>
+                                        <th>Parameter</th>
+                                        <th>Count</th>
+                                        <th>Min</th>
+                                        <th>Max</th>
+                                        <th>Mean</th>
+                                        <th>Median</th>
+                                        <th>Std Dev</th>
+                                        <th>Range</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stats-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Flight Analysis Tab -->
+                    <div class="tab-pane" id="tab-flight-analysis">
+                        <div class="analysis-header">
+                            <h3><i class="fas fa-plane-departure"></i> Flight Phase Analysis</h3>
+                            <button class="btn btn-primary" id="btn-analyze-flight">
+                                <i class="fas fa-chart-line"></i>
+                                Analyze Flight
+                            </button>
+                        </div>
+                        <div class="analysis-results" id="flight-analysis-results">
+                            <div class="plot-placeholder">
+                                <i class="fas fa-plane-departure"></i>
+                                <p>Click "Analyze Flight" to detect flight phases and analyze performance</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Correlation Tab -->
+                    <div class="tab-pane" id="tab-correlation">
+                        <div class="corr-header">
+                            <h3><i class="fas fa-project-diagram"></i> Parameter Correlation</h3>
+                            <button class="btn btn-primary" id="btn-calc-corr">
+                                <i class="fas fa-calculator"></i>
+                                Calculate Correlation
+                            </button>
+                        </div>
+                        <div class="corr-info">
+                            <p>Correlation ranges from -1 (negative) to +1 (positive)</p>
+                        </div>
+                        <div class="plot-container" id="corr-plot">
+                            <div class="plot-placeholder">
+                                <i class="fas fa-th"></i>
+                                <p>Select at least 2 parameters to analyze correlations</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Flight Path Tab -->
+                    <div class="tab-pane" id="tab-flight-path">
+                        <div class="flight-header">
+                            <h3><i class="fas fa-route"></i> 3D Flight Path</h3>
+                            <div class="control-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="opt-color-altitude" checked>
+                                    <span>Color by Altitude</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="opt-show-markers">
+                                    <span>Show Markers</span>
+                                </label>
+                                <button class="btn btn-primary" id="btn-update-flight">
+                                    <i class="fas fa-sync-alt"></i>
+                                    Update
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flight-stats" id="flight-stats"></div>
+                        <div class="plot-container plot-3d" id="flight-plot">
+                            <div class="plot-placeholder">
+                                <i class="fas fa-plane"></i>
+                                <p>Load a file with position data to view flight path</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Status Bar -->
+        <footer class="status-bar">
+            <div class="status-left">
+                <span id="status-message">Ready</span>
+            </div>
+            <div class="status-right">
+                <span id="status-selection">0 parameters selected</span>
+            </div>
+        </footer>
+
+        <!-- File Upload Modal -->
+        <div class="modal" id="file-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Open XDR File</h3>
+                    <button class="btn btn-icon" id="close-modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="drop-zone" id="drop-zone">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Drag & drop XDR file here</p>
+                        <span>or</span>
+                        <button class="btn btn-primary" id="btn-browse">Browse Files</button>
+                        <input type="file" id="file-input" accept=".xdr" hidden>
+                    </div>
+                    <div class="divider-text">
+                        <span>or enter file path</span>
+                    </div>
+                    <div class="path-input">
+                        <input type="text" id="file-path" placeholder="C:\path\to\file.xdr">
+                        <button class="btn btn-primary" id="btn-load-path">Load</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay hidden" id="loading">
+            <div class="loading-spinner">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Loading...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tauri API must load before our app -->
+    <script type="module">
+        // Tauri API is injected automatically in Tauri apps
+        // This check ensures the app works in both Tauri and web mode
+        if (window.__TAURI__) {
+            console.log('Running in Tauri mode');
+        } else {
+            console.log('Running in web mode');
+        }
+    </script>
+    <script src="js/tauri-api.js"></script>
+    <script src="js/app.js"></script>
+
+</body>
+</html>

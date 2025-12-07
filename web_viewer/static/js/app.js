@@ -18,8 +18,9 @@ const state = {
     ]
 };
 
-// API Functions
-const api = {
+// API Functions - use the Tauri-compatible API from tauri-api.js
+const api = window.xdrApi || {
+    // Fallback API for direct web mode (should not be used in Tauri)
     async uploadFile(file) {
         const formData = new FormData();
         formData.append('file', file);
@@ -58,13 +59,13 @@ const api = {
         return response.json();
     },
 
-    async getFFT(param) {
-        const response = await fetch('/api/fft', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ index: param.index, array_index: param.array_index || 0 })
-        });
-        return response.json();
+    async analyzeFlight() {
+        if (isTauri) {
+            return await tauriApi.invoke('analyze_flight');
+        } else {
+            const response = await fetch('/api/analyze-flight');
+            return response.json();
+        }
     },
 
     async getCorrelation(params) {
@@ -88,8 +89,13 @@ const api = {
             body: JSON.stringify({ start, count })
         });
         return response.json();
+    },
+
+    async openFileDialog() {
+        return null;
     }
 };
+
 
 // Error types for better messaging
 const ErrorTypes = {
@@ -384,19 +390,167 @@ function clearAllParams() {
     ui.updateSelectionCount();
 }
 
-function updateFFTSelect() {
-    const select = document.getElementById('fft-param-select');
-    select.innerHTML = '<option value="">-- Select parameter --</option>';
+// Flight Analysis Functions
+async function loadFlightAnalysis() {
+    const container = document.getElementById('flight-analysis-results');
     
-    state.selectedParams.forEach((param, idx) => {
-        const option = document.createElement('option');
-        option.value = idx;
-        option.textContent = param.name;
-        select.appendChild(option);
-    });
+    if (!state.fileLoaded) {
+        container.innerHTML = `
+            <div class="plot-placeholder">
+                <i class="fas fa-plane-departure"></i>
+                <p>Load a file first to analyze flight data</p>
+            </div>
+        `;
+        return;
+    }
+
+    ui.showLoading('Analyzing flight phases...');
+
+    try {
+        const result = await api.analyzeFlight();
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        let html = '<div class="analysis-summary">';
+        html += '<h4><i class="fas fa-info-circle"></i> Flight Summary</h4>';
+        html += '<div class="stats-grid">';
+        html += `<div class="stat-item">
+            <span class="stat-label">Total Flight Time</span>
+            <span class="stat-value">${(result.total_flight_time / 60).toFixed(1)} min</span>
+        </div>`;
+        html += `<div class="stat-item">
+            <span class="stat-label">Max Altitude</span>
+            <span class="stat-value">${result.max_altitude.toFixed(0)} ft</span>
+        </div>`;
+        html += `<div class="stat-item">
+            <span class="stat-label">Max Speed</span>
+            <span class="stat-value">${result.max_speed.toFixed(1)} kts</span>
+        </div>`;
+        
+        if (result.max_climb_rate) {
+            html += `<div class="stat-item">
+                <span class="stat-label">Max Climb Rate</span>
+                <span class="stat-value">${result.max_climb_rate.toFixed(0)} fpm</span>
+            </div>`;
+        }
+        
+        if (result.max_descent_rate) {
+            html += `<div class="stat-item">
+                <span class="stat-label">Max Descent Rate</span>
+                <span class="stat-value">${result.max_descent_rate.toFixed(0)} fpm</span>
+            </div>`;
+        }
+        
+        if (result.average_fuel_flow) {
+            html += `<div class="stat-item">
+                <span class="stat-label">Avg Fuel Flow</span>
+                <span class="stat-value">${result.average_fuel_flow.toFixed(2)} lbs/hr</span>
+            </div>`;
+        }
+        
+        if (result.landing_g_force) {
+            const gColor = result.landing_g_force > 2.0 ? 'color: #ff6b6b;' : '';
+            html += `<div class="stat-item">
+                <span class="stat-label">Landing G-Force</span>
+                <span class="stat-value" style="${gColor}">${result.landing_g_force.toFixed(2)}G</span>
+            </div>`;
+        }
+        
+        html += '</div></div>';
+
+        // Approach Analysis
+        if (result.approach_analysis) {
+            const approach = result.approach_analysis;
+            const stableClass = approach.stable_approach ? 'stable' : 'unstable';
+            html += '<div class="analysis-section approach-analysis">';
+            html += '<h4><i class="fas fa-plane-arrival"></i> Approach Analysis</h4>';
+            html += '<div class="approach-stats">';
+            html += `<div class="approach-item">
+                <span class="approach-label">Approach Stability:</span>
+                <span class="approach-value ${stableClass}">
+                    ${approach.stable_approach ? '✓ Stable' : '⚠ Unstable'}
+                </span>
+            </div>`;
+            html += `<div class="approach-item">
+                <span class="approach-label">Avg Descent Rate:</span>
+                <span class="approach-value">${Math.abs(approach.average_descent_rate).toFixed(0)} fpm</span>
+            </div>`;
+            html += `<div class="approach-item">
+                <span class="approach-label">Touchdown Speed:</span>
+                <span class="approach-value">${approach.touchdown_speed.toFixed(1)} kts</span>
+            </div>`;
+            html += '</div></div>';
+        }
+
+        // Flight Phases
+        if (result.phases && result.phases.length > 0) {
+            html += '<div class="analysis-phases">';
+            html += '<h4><i class="fas fa-list"></i> Flight Phases</h4>';
+            html += '<table class="phases-table">';
+            html += '<thead><tr><th>Phase</th><th>Start Time</th><th>Duration</th></tr></thead>';
+            html += '<tbody>';
+            
+            result.phases.forEach(phase => {
+                const startMin = (phase.start_time / 60).toFixed(1);
+                const durationSec = phase.duration.toFixed(0);
+                html += `<tr>
+                    <td><strong>${phase.name}</strong></td>
+                    <td>${startMin} min</td>
+                    <td>${durationSec}s</td>
+                </tr>`;
+            });
+            
+            html += '</tbody></table>';
+            html += '</div>';
+        }
+
+        // Anomalies
+        if (result.anomalies && result.anomalies.length > 0) {
+            html += '<div class="analysis-section anomalies-section">';
+            html += '<h4><i class="fas fa-exclamation-triangle"></i> Detected Anomalies</h4>';
+            html += '<div class="anomalies-list">';
+            
+            result.anomalies.forEach(anomaly => {
+                const severityClass = `severity-${anomaly.severity}`;
+                const timeMin = (anomaly.timestamp / 60).toFixed(1);
+                html += `<div class="anomaly-item ${severityClass}">
+                    <div class="anomaly-header">
+                        <span class="anomaly-severity">${anomaly.severity.toUpperCase()}</span>
+                        <span class="anomaly-time">${timeMin} min</span>
+                    </div>
+                    <div class="anomaly-desc">${anomaly.description}</div>
+                    <div class="anomaly-detail">${anomaly.parameter}: ${anomaly.value.toFixed(1)}</div>
+                </div>`;
+            });
+            
+            html += '</div></div>';
+        }
+
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Flight analysis error:', error);
+        container.innerHTML = `
+            <div class="plot-placeholder">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Analysis error: ${error.message}</p>
+            </div>
+        `;
+    } finally {
+        ui.hideLoading();
+    }
 }
 
 // Plotting Functions (using Plotly)
+// Performance thresholds for rendering optimization
+const PLOT_PERF_THRESHOLDS = {
+    LARGE_DATASET: 10000,    // Switch to WebGL rendering
+    DOWNSAMPLE_MIN: 20000,   // Start downsampling
+    DOWNSAMPLE_MAX: 50000,   // Aggressive downsampling
+    ANIMATION_LIMIT: 20000   // Disable animations
+};
+
 async function updatePlot() {
     const container = document.getElementById('main-plot');
     
@@ -413,7 +567,20 @@ async function updatePlot() {
     ui.showLoading('Loading data...');
 
     try {
-        const data = await api.getData(state.selectedParams, 1);
+        // Smart downsampling based on data size
+        const frameCount = state.header?.frame_count || 10000;
+        let downsample = 1;
+        
+        // Optimize rendering for large datasets
+        if (frameCount > PLOT_PERF_THRESHOLDS.DOWNSAMPLE_MAX) {
+            downsample = Math.ceil(frameCount / 10000); // Keep ~10k points max
+        } else if (frameCount > PLOT_PERF_THRESHOLDS.DOWNSAMPLE_MIN) {
+            downsample = Math.ceil(frameCount / 15000); // Keep ~15k points
+        }
+        
+        console.log(`Data points: ${frameCount}, Downsampling: ${downsample}x`);
+        
+        const data = await api.getData(state.selectedParams, downsample);
         
         if (data.error) {
             throw new Error(data.error);
@@ -427,9 +594,12 @@ async function updatePlot() {
                 x: paramData.timestamps,
                 y: paramData.values,
                 name: name,
-                type: 'scatter',
+                type: frameCount > PLOT_PERF_THRESHOLDS.LARGE_DATASET ? 'scattergl' : 'scatter', // Use WebGL for large datasets
                 mode: 'lines',
-                line: { color: state.colors[colorIdx], width: 1.5 }
+                line: { 
+                    color: state.colors[colorIdx], 
+                    width: frameCount > PLOT_PERF_THRESHOLDS.LARGE_DATASET ? 1 : 1.5 
+                }
             });
         }
 
@@ -443,13 +613,15 @@ async function updatePlot() {
                 title: 'Time (s)',
                 showgrid: showGrid,
                 gridcolor: getComputedStyle(document.body).getPropertyValue('--border-color'),
-                color: getComputedStyle(document.body).getPropertyValue('--text-secondary')
+                color: getComputedStyle(document.body).getPropertyValue('--text-secondary'),
+                zeroline: false
             },
             yaxis: {
                 title: 'Value',
                 showgrid: showGrid,
                 gridcolor: getComputedStyle(document.body).getPropertyValue('--border-color'),
-                color: getComputedStyle(document.body).getPropertyValue('--text-secondary')
+                color: getComputedStyle(document.body).getPropertyValue('--text-secondary'),
+                zeroline: false
             },
             legend: {
                 orientation: 'h',
@@ -463,7 +635,14 @@ async function updatePlot() {
         const config = {
             responsive: true,
             displayModeBar: true,
-            modeBarButtonsToRemove: ['lasso2d', 'select2d']
+            displaylogo: false,
+            modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+            toImageButtonOptions: {
+                format: 'png',
+                filename: 'xblackbox_plot',
+                height: 800,
+                width: 1200
+            }
         };
 
         // Create plot with animation
@@ -541,78 +720,6 @@ async function loadStatistics() {
     } catch (error) {
         console.error('Statistics error:', error);
         container.innerHTML = `<tr><td colspan="8" style="text-align:center">Error: ${error.message}</td></tr>`;
-    } finally {
-        ui.hideLoading();
-    }
-}
-
-// FFT Functions
-async function loadFFT() {
-    const container = document.getElementById('fft-plot');
-    const select = document.getElementById('fft-param-select');
-    const selectedIdx = select.value;
-    
-    if (selectedIdx === '' || state.selectedParams.length === 0) {
-        container.innerHTML = `
-            <div class="plot-placeholder">
-                <i class="fas fa-wave-square"></i>
-                <p>Select a parameter to analyze frequencies</p>
-            </div>
-        `;
-        return;
-    }
-
-    const param = state.selectedParams[parseInt(selectedIdx)];
-    document.getElementById('fft-info').textContent = `Analyzing: ${param.name}`;
-
-    ui.showLoading('Calculating FFT...');
-
-    try {
-        const result = await api.getFFT(param);
-        
-        if (result.error) {
-            throw new Error(result.error);
-        }
-
-        const trace = {
-            x: result.frequencies,
-            y: result.magnitudes,
-            type: 'scatter',
-            mode: 'lines',
-            fill: 'tozeroy',
-            line: { color: state.colors[0] }
-        };
-
-        const layout = {
-            paper_bgcolor: 'transparent',
-            plot_bgcolor: 'transparent',
-            font: { color: getComputedStyle(document.body).getPropertyValue('--text-primary') },
-            xaxis: {
-                title: 'Frequency (Hz)',
-                showgrid: true,
-                gridcolor: getComputedStyle(document.body).getPropertyValue('--border-color')
-            },
-            yaxis: {
-                title: 'Magnitude',
-                showgrid: true,
-                gridcolor: getComputedStyle(document.body).getPropertyValue('--border-color')
-            },
-            margin: { l: 60, r: 30, t: 30, b: 60 },
-            transition: {
-                duration: 500,
-                easing: 'cubic-in-out'
-            }
-        };
-
-        Plotly.newPlot(container, [trace], layout, { responsive: true });
-    } catch (error) {
-        console.error('FFT error:', error);
-        container.innerHTML = `
-            <div class="plot-placeholder">
-                <i class="fas fa-exclamation-triangle"></i>
-                <p>FFT error: ${error.message}</p>
-            </div>
-        `;
     } finally {
         ui.hideLoading();
     }
@@ -715,67 +822,117 @@ async function load3DPath() {
 
         const colorByAlt = document.getElementById('opt-color-altitude').checked;
         const showMarkers = document.getElementById('opt-show-markers').checked;
+        
+        // Optimize for large datasets
+        const dataSize = result.latitudes.length;
+        const useMarkers = showMarkers && dataSize < PLOT_PERF_THRESHOLDS.LARGE_DATASET;
 
         const trace = {
             x: result.longitudes,
             y: result.latitudes,
             z: result.altitudes,
-            mode: showMarkers ? 'lines+markers' : 'lines',
-            type: 'scatter3d',
+            mode: useMarkers ? 'lines+markers' : 'lines',
+            type: useMarkers ? 'scatter3d' : 'scatter3d',
             line: {
-                width: 3,
+                width: dataSize > PLOT_PERF_THRESHOLDS.LARGE_DATASET ? 2 : 3,
                 color: colorByAlt ? result.altitudes : state.colors[0],
-                colorscale: 'Viridis'
+                colorscale: colorByAlt ? 'Viridis' : undefined,
+                showscale: colorByAlt,
+                colorbar: colorByAlt ? {
+                    title: 'Altitude (m)',
+                    thickness: 15,
+                    len: 0.5
+                } : undefined
             },
-            marker: {
+            marker: useMarkers ? {
                 size: 2,
                 color: colorByAlt ? result.altitudes : state.colors[0],
                 colorscale: 'Viridis'
-            }
+            } : undefined,
+            hovertemplate: '<b>Position</b><br>' +
+                          'Lat: %{y:.4f}°<br>' +
+                          'Lon: %{x:.4f}°<br>' +
+                          'Alt: %{z:.0f} m<br>' +
+                          '<extra></extra>'
         };
 
         const layout = {
             paper_bgcolor: 'transparent',
             font: { color: getComputedStyle(document.body).getPropertyValue('--text-primary') },
             scene: {
-                xaxis: { title: 'Longitude', backgroundcolor: 'transparent' },
-                yaxis: { title: 'Latitude', backgroundcolor: 'transparent' },
-                zaxis: { title: 'Altitude (m)', backgroundcolor: 'transparent' },
+                xaxis: { 
+                    title: 'Longitude', 
+                    backgroundcolor: 'rgba(0,0,0,0)',
+                    gridcolor: getComputedStyle(document.body).getPropertyValue('--border-color'),
+                    showbackground: true
+                },
+                yaxis: { 
+                    title: 'Latitude', 
+                    backgroundcolor: 'rgba(0,0,0,0)',
+                    gridcolor: getComputedStyle(document.body).getPropertyValue('--border-color'),
+                    showbackground: true
+                },
+                zaxis: { 
+                    title: 'Altitude (m)', 
+                    backgroundcolor: 'rgba(0,0,0,0)',
+                    gridcolor: getComputedStyle(document.body).getPropertyValue('--border-color'),
+                    showbackground: true
+                },
                 bgcolor: 'transparent',
                 camera: {
-                    eye: { x: 1.5, y: 1.5, z: 1.2 }
+                    eye: { x: 1.5, y: 1.5, z: 1.2 },
+                    center: { x: 0, y: 0, z: 0 }
                 }
             },
-            margin: { l: 0, r: 0, t: 30, b: 0 }
+            margin: { l: 0, r: 0, t: 30, b: 0 },
+            showlegend: false
         };
 
-        await Plotly.newPlot(container, [trace], layout, { responsive: true });
+        const config = {
+            responsive: true,
+            displayModeBar: true,
+            displaylogo: false,
+            modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+            toImageButtonOptions: {
+                format: 'png',
+                filename: 'flight_path_3d',
+                height: 800,
+                width: 1200
+            }
+        };
+
+        await Plotly.newPlot(container, [trace], layout, config);
         
-        // Animate camera for 3D effect
-        Plotly.animate(container, {
-            layout: {
-                scene: {
-                    camera: {
-                        eye: { x: 1.2, y: 1.2, z: 1.0 }
+        // Animate camera for 3D effect (only for smaller datasets)
+        if (dataSize < PLOT_PERF_THRESHOLDS.ANIMATION_LIMIT) {
+            Plotly.animate(container, {
+                layout: {
+                    scene: {
+                        camera: {
+                            eye: { x: 1.2, y: 1.2, z: 1.0 }
+                        }
                     }
                 }
-            }
-        }, {
-            transition: {
-                duration: 1000,
-                easing: 'cubic-in-out'
-            },
-            frame: {
-                duration: 1000
-            }
-        });
+            }, {
+                transition: {
+                    duration: 1000,
+                    easing: 'cubic-in-out'
+                },
+                frame: {
+                    duration: 1000
+                }
+            });
+        }
 
         // Update stats
         const altMin = Math.min(...result.altitudes);
         const altMax = Math.max(...result.altitudes);
+        const distanceKm = calculatePathDistance(result.latitudes, result.longitudes);
+        
         document.getElementById('flight-stats').innerHTML = 
             `<b>Data points:</b> ${result.latitudes.length.toLocaleString()} | 
-             <b>Altitude range:</b> ${altMin.toFixed(0)} - ${altMax.toFixed(0)} m`;
+             <b>Altitude range:</b> ${altMin.toFixed(0)} - ${altMax.toFixed(0)} m | 
+             <b>Distance:</b> ${distanceKm.toFixed(1)} km`;
 
     } catch (error) {
         console.error('3D path error:', error);
@@ -786,6 +943,30 @@ async function load3DPath() {
             </div>
         `;
     } finally {
+        ui.hideLoading();
+    }
+}
+
+// Helper function to calculate path distance
+function calculatePathDistance(lats, lons) {
+    if (lats.length < 2) return 0;
+    
+    let totalDistance = 0;
+    for (let i = 1; i < lats.length; i++) {
+        const lat1 = lats[i-1] * Math.PI / 180;
+        const lat2 = lats[i] * Math.PI / 180;
+        const dLat = lat2 - lat1;
+        const dLon = (lons[i] - lons[i-1]) * Math.PI / 180;
+        
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                 Math.cos(lat1) * Math.cos(lat2) *
+                 Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        totalDistance += 6371 * c; // Earth radius in km
+    }
+    
+    return totalDistance;
+}
         ui.hideLoading();
     }
 }
@@ -1064,8 +1245,24 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.setAttribute('data-theme', savedTheme);
     document.querySelector('#btn-theme i').className = savedTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
 
-    // Modal controls - Top bar Open button (always works)
-    document.getElementById('btn-open').addEventListener('click', () => ui.showModal('file-modal'));
+    // Modal controls - Top bar Open button
+    document.getElementById('btn-open').addEventListener('click', async () => {
+        if (window.isTauri) {
+            // Use Tauri file dialog
+            try {
+                const filePath = await api.openFileDialog();
+                if (filePath) {
+                    await handlers.loadPath(filePath);
+                }
+            } catch (error) {
+                console.error('Error opening file dialog:', error);
+                ui.showError(error.message || 'Failed to open file dialog');
+            }
+        } else {
+            // Use modal for web mode
+            ui.showModal('file-modal');
+        }
+    });
     document.getElementById('close-modal').addEventListener('click', () => ui.hideModal('file-modal'));
 
     // File Info Panel click - only works when no file is loaded
@@ -1181,8 +1378,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Statistics
     document.getElementById('btn-calc-stats').addEventListener('click', loadStatistics);
 
-    // FFT
-    document.getElementById('btn-calc-fft').addEventListener('click', loadFFT);
+    // Flight Analysis
+    document.getElementById('btn-analyze-flight').addEventListener('click', loadFlightAnalysis);
 
     // Correlation
     document.getElementById('btn-calc-corr').addEventListener('click', loadCorrelation);

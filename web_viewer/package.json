@@ -1,0 +1,13 @@
+{
+  "name": "xblackbox-viewer",
+  "version": "1.0.0",
+  "description": "XBlackBox XDR Viewer - Tauri Desktop Application",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.5"
+  }
+}
