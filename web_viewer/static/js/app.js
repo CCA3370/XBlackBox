@@ -811,67 +811,117 @@ async function load3DPath() {
 
         const colorByAlt = document.getElementById('opt-color-altitude').checked;
         const showMarkers = document.getElementById('opt-show-markers').checked;
+        
+        // Optimize for large datasets
+        const dataSize = result.latitudes.length;
+        const useGL = dataSize > 5000;
 
         const trace = {
             x: result.longitudes,
             y: result.latitudes,
             z: result.altitudes,
-            mode: showMarkers ? 'lines+markers' : 'lines',
-            type: 'scatter3d',
+            mode: showMarkers && dataSize < 10000 ? 'lines+markers' : 'lines',
+            type: useGL ? 'scatter3d' : 'scatter3d', // Could use scattergl for 2D projection
             line: {
-                width: 3,
+                width: dataSize > 10000 ? 2 : 3,
                 color: colorByAlt ? result.altitudes : state.colors[0],
-                colorscale: 'Viridis'
+                colorscale: colorByAlt ? 'Viridis' : undefined,
+                showscale: colorByAlt,
+                colorbar: colorByAlt ? {
+                    title: 'Altitude (m)',
+                    thickness: 15,
+                    len: 0.5
+                } : undefined
             },
-            marker: {
+            marker: showMarkers && dataSize < 10000 ? {
                 size: 2,
                 color: colorByAlt ? result.altitudes : state.colors[0],
                 colorscale: 'Viridis'
-            }
+            } : undefined,
+            hovertemplate: '<b>Position</b><br>' +
+                          'Lat: %{y:.4f}°<br>' +
+                          'Lon: %{x:.4f}°<br>' +
+                          'Alt: %{z:.0f} m<br>' +
+                          '<extra></extra>'
         };
 
         const layout = {
             paper_bgcolor: 'transparent',
             font: { color: getComputedStyle(document.body).getPropertyValue('--text-primary') },
             scene: {
-                xaxis: { title: 'Longitude', backgroundcolor: 'transparent' },
-                yaxis: { title: 'Latitude', backgroundcolor: 'transparent' },
-                zaxis: { title: 'Altitude (m)', backgroundcolor: 'transparent' },
+                xaxis: { 
+                    title: 'Longitude', 
+                    backgroundcolor: 'rgba(0,0,0,0)',
+                    gridcolor: getComputedStyle(document.body).getPropertyValue('--border-color'),
+                    showbackground: true
+                },
+                yaxis: { 
+                    title: 'Latitude', 
+                    backgroundcolor: 'rgba(0,0,0,0)',
+                    gridcolor: getComputedStyle(document.body).getPropertyValue('--border-color'),
+                    showbackground: true
+                },
+                zaxis: { 
+                    title: 'Altitude (m)', 
+                    backgroundcolor: 'rgba(0,0,0,0)',
+                    gridcolor: getComputedStyle(document.body).getPropertyValue('--border-color'),
+                    showbackground: true
+                },
                 bgcolor: 'transparent',
                 camera: {
-                    eye: { x: 1.5, y: 1.5, z: 1.2 }
+                    eye: { x: 1.5, y: 1.5, z: 1.2 },
+                    center: { x: 0, y: 0, z: 0 }
                 }
             },
-            margin: { l: 0, r: 0, t: 30, b: 0 }
+            margin: { l: 0, r: 0, t: 30, b: 0 },
+            showlegend: false
         };
 
-        await Plotly.newPlot(container, [trace], layout, { responsive: true });
+        const config = {
+            responsive: true,
+            displayModeBar: true,
+            displaylogo: false,
+            modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+            toImageButtonOptions: {
+                format: 'png',
+                filename: 'flight_path_3d',
+                height: 800,
+                width: 1200
+            }
+        };
+
+        await Plotly.newPlot(container, [trace], layout, config);
         
-        // Animate camera for 3D effect
-        Plotly.animate(container, {
-            layout: {
-                scene: {
-                    camera: {
-                        eye: { x: 1.2, y: 1.2, z: 1.0 }
+        // Animate camera for 3D effect (only for smaller datasets)
+        if (dataSize < 20000) {
+            Plotly.animate(container, {
+                layout: {
+                    scene: {
+                        camera: {
+                            eye: { x: 1.2, y: 1.2, z: 1.0 }
+                        }
                     }
                 }
-            }
-        }, {
-            transition: {
-                duration: 1000,
-                easing: 'cubic-in-out'
-            },
-            frame: {
-                duration: 1000
-            }
-        });
+            }, {
+                transition: {
+                    duration: 1000,
+                    easing: 'cubic-in-out'
+                },
+                frame: {
+                    duration: 1000
+                }
+            });
+        }
 
         // Update stats
         const altMin = Math.min(...result.altitudes);
         const altMax = Math.max(...result.altitudes);
+        const distanceKm = calculatePathDistance(result.latitudes, result.longitudes);
+        
         document.getElementById('flight-stats').innerHTML = 
             `<b>Data points:</b> ${result.latitudes.length.toLocaleString()} | 
-             <b>Altitude range:</b> ${altMin.toFixed(0)} - ${altMax.toFixed(0)} m`;
+             <b>Altitude range:</b> ${altMin.toFixed(0)} - ${altMax.toFixed(0)} m | 
+             <b>Distance:</b> ${distanceKm.toFixed(1)} km`;
 
     } catch (error) {
         console.error('3D path error:', error);
@@ -882,6 +932,30 @@ async function load3DPath() {
             </div>
         `;
     } finally {
+        ui.hideLoading();
+    }
+}
+
+// Helper function to calculate path distance
+function calculatePathDistance(lats, lons) {
+    if (lats.length < 2) return 0;
+    
+    let totalDistance = 0;
+    for (let i = 1; i < lats.length; i++) {
+        const lat1 = lats[i-1] * Math.PI / 180;
+        const lat2 = lats[i] * Math.PI / 180;
+        const dLat = lat2 - lat1;
+        const dLon = (lons[i] - lons[i-1]) * Math.PI / 180;
+        
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                 Math.cos(lat1) * Math.cos(lat2) *
+                 Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        totalDistance += 6371 * c; // Earth radius in km
+    }
+    
+    return totalDistance;
+}
         ui.hideLoading();
     }
 }
