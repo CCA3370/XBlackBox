@@ -2,14 +2,26 @@
 """
 XBlackBox XDR Viewer - PySide6 GUI Application
 Visualize and analyze X-Plane flight data recordings
+
+Enhanced with:
+- Performance optimization with data downsampling
+- Advanced statistics and analysis
+- Recent files menu
+- Drag and drop support
+- Time range selection
+- Keyboard shortcuts
 """
 
 import sys
 import struct
 import csv
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+from functools import partial
+
+import numpy as np
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -17,10 +29,10 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox, QStatusBar, QGroupBox, QCheckBox,
     QScrollArea, QFrame, QComboBox, QSpinBox, QDoubleSpinBox,
     QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
-    QToolBar, QStyle, QSizePolicy
+    QToolBar, QStyle, QSizePolicy, QProgressDialog, QSlider
 )
-from PySide6.QtCore import Qt, Signal, QThread, QTimer
-from PySide6.QtGui import QAction, QFont, QColor, QIcon
+from PySide6.QtCore import Qt, Signal, QThread, QTimer, QSettings, QUrl
+from PySide6.QtGui import QAction, QFont, QColor, QIcon, QKeySequence, QDragEnterEvent, QDropEvent
 
 import matplotlib
 matplotlib.use('QtAgg')
@@ -299,15 +311,35 @@ class XDRData:
                         values.append('')
         return values
         
-    def get_parameter_data(self, dataref_index: int, array_index: int = 0) -> tuple:
-        """Get timestamps and values for a specific parameter"""
+    def get_parameter_data(self, dataref_index: int, array_index: int = 0, 
+                          time_range: Optional[tuple] = None, 
+                          downsample_factor: int = 1) -> tuple:
+        """Get timestamps and values for a specific parameter
+        
+        Args:
+            dataref_index: Index of the dataref
+            array_index: Index for array datarefs
+            time_range: Optional (start_time, end_time) tuple to filter data
+            downsample_factor: Factor to downsample data (1=no downsampling)
+        """
         timestamps = []
         values = []
         
         dr = self.datarefs[dataref_index]
         
-        for frame in self.frames:
-            timestamps.append(frame['timestamp'])
+        for i, frame in enumerate(self.frames):
+            # Apply downsampling
+            if i % downsample_factor != 0:
+                continue
+                
+            timestamp = frame['timestamp']
+            
+            # Apply time range filter
+            if time_range:
+                if timestamp < time_range[0] or timestamp > time_range[1]:
+                    continue
+            
+            timestamps.append(timestamp)
             value = frame['values'][dataref_index]
             
             if dr['array_size'] > 0:
@@ -319,6 +351,28 @@ class XDRData:
                     values.append(value)
                     
         return timestamps, values
+        
+    def get_parameter_statistics(self, dataref_index: int, array_index: int = 0,
+                                 time_range: Optional[tuple] = None) -> Dict:
+        """Calculate statistics for a parameter"""
+        timestamps, values = self.get_parameter_data(
+            dataref_index, array_index, time_range, downsample_factor=1
+        )
+        
+        if not values:
+            return {}
+        
+        values_array = np.array(values)
+        
+        return {
+            'count': len(values),
+            'min': float(np.min(values_array)),
+            'max': float(np.max(values_array)),
+            'mean': float(np.mean(values_array)),
+            'median': float(np.median(values_array)),
+            'std': float(np.std(values_array)),
+            'range': float(np.max(values_array) - np.min(values_array))
+        }
         
     def get_all_plottable_parameters(self) -> List[Dict]:
         """Get list of all parameters that can be plotted"""
@@ -342,6 +396,41 @@ class XDRData:
                     'type': dr['type']
                 })
         return params
+    
+    def get_parameter_derivative(self, dataref_index: int, array_index: int = 0,
+                                 time_range: Optional[tuple] = None) -> tuple:
+        """Calculate derivative (rate of change) of a parameter
+        
+        Returns:
+            tuple[List[float], List[float]]: (timestamps, derivative_values)
+        """
+        timestamps, values = self.get_parameter_data(
+            dataref_index, array_index, time_range, downsample_factor=1
+        )
+        
+        if len(timestamps) < 2:
+            return [], []
+        
+        # Calculate derivative using numpy
+        values_array = np.array(values)
+        timestamps_array = np.array(timestamps)
+        
+        # Use gradient for better numerical derivative
+        derivative = np.gradient(values_array, timestamps_array)
+        
+        return timestamps, derivative.tolist()
+    
+    def calculate_correlation(self, param1_index: int, param1_array_idx: int,
+                             param2_index: int, param2_array_idx: int,
+                             time_range: Optional[tuple] = None) -> float:
+        """Calculate correlation coefficient between two parameters"""
+        _, values1 = self.get_parameter_data(param1_index, param1_array_idx, time_range, 1)
+        _, values2 = self.get_parameter_data(param2_index, param2_array_idx, time_range, 1)
+        
+        if len(values1) != len(values2) or len(values1) < 2:
+            return 0.0
+        
+        return float(np.corrcoef(values1, values2)[0, 1])
         
     def export_to_csv(self, output_path: str):
         """Export data to CSV file"""
@@ -370,6 +459,9 @@ class XDRData:
 class PlotCanvas(FigureCanvas):
     """Matplotlib canvas for plotting"""
     
+    # Maximum number of points to plot before downsampling
+    MAX_PLOT_POINTS = 5000
+    
     def __init__(self, parent=None):
         self.fig = Figure(figsize=(10, 6), dpi=100)
         self.fig.set_facecolor('#2b2b2b')
@@ -390,8 +482,18 @@ class PlotCanvas(FigureCanvas):
         self.draw()
         
     def plot_parameters(self, data: XDRData, parameters: List[Dict], 
-                        separate_axes: bool = False, show_grid: bool = True):
-        """Plot multiple parameters with their assigned colors"""
+                        separate_axes: bool = False, show_grid: bool = True,
+                        time_range: Optional[tuple] = None, plot_derivative: bool = False):
+        """Plot multiple parameters with their assigned colors
+        
+        Args:
+            data: XDR data container
+            parameters: List of parameters to plot
+            separate_axes: Whether to use separate axes for each parameter
+            show_grid: Whether to show grid
+            time_range: Optional (start, end) time range to plot
+            plot_derivative: Whether to plot derivative instead of raw values
+        """
         self.fig.clear()
         self.axes = []
         self.plots = []
@@ -399,6 +501,10 @@ class PlotCanvas(FigureCanvas):
         if not parameters:
             self.draw()
             return
+        
+        # Calculate downsampling factor based on data size
+        total_frames = len(data.frames)
+        downsample_factor = max(1, total_frames // self.MAX_PLOT_POINTS)
         
         if separate_axes:
             # Each parameter on its own axis
@@ -408,16 +514,24 @@ class PlotCanvas(FigureCanvas):
                 ax.set_facecolor('#1e1e1e')
                 self.axes.append(ax)
                 
-                timestamps, values = data.get_parameter_data(
-                    param['index'], param['array_index']
-                )
+                if plot_derivative:
+                    timestamps, values = data.get_parameter_derivative(
+                        param['index'], param['array_index'], time_range
+                    )
+                    ylabel = f"d/dt {self._short_name(param['name'])}"
+                else:
+                    timestamps, values = data.get_parameter_data(
+                        param['index'], param['array_index'],
+                        time_range=time_range, downsample_factor=downsample_factor
+                    )
+                    ylabel = self._short_name(param['name'])
                 
                 # Use assigned color from parameter
                 color = param.get('color', '#ffffff')
                 line, = ax.plot(timestamps, values, color=color, linewidth=1.0)
                 self.plots.append(line)
                 
-                ax.set_ylabel(self._short_name(param['name']), fontsize=8, color='white')
+                ax.set_ylabel(ylabel, fontsize=8, color='white')
                 ax.tick_params(colors='white', labelsize=8)
                 ax.grid(show_grid, alpha=0.3)
                 
@@ -431,18 +545,27 @@ class PlotCanvas(FigureCanvas):
             self.axes.append(ax)
             
             for i, param in enumerate(parameters):
-                timestamps, values = data.get_parameter_data(
-                    param['index'], param['array_index']
-                )
+                if plot_derivative:
+                    timestamps, values = data.get_parameter_derivative(
+                        param['index'], param['array_index'], time_range
+                    )
+                    label = f"d/dt {self._short_name(param['name'])}"
+                else:
+                    timestamps, values = data.get_parameter_data(
+                        param['index'], param['array_index'],
+                        time_range=time_range, downsample_factor=downsample_factor
+                    )
+                    label = self._short_name(param['name'])
                 
                 # Use assigned color from parameter
                 color = param.get('color', '#ffffff')
                 line, = ax.plot(timestamps, values, color=color, linewidth=1.0,
-                               label=self._short_name(param['name']))
+                               label=label)
                 self.plots.append(line)
                 
             ax.set_xlabel('Time (seconds)', color='white')
-            ax.set_ylabel('Value', color='white')
+            ylabel = 'Rate of Change' if plot_derivative else 'Value'
+            ax.set_ylabel(ylabel, color='white')
             ax.tick_params(colors='white')
             ax.grid(show_grid, alpha=0.3)
             ax.legend(loc='upper right', fontsize=8, facecolor='#2b2b2b', 
@@ -793,25 +916,229 @@ class DataTableWidget(QWidget):
                     col += 1
 
 
+class StatisticsWidget(QWidget):
+    """Widget for displaying parameter statistics"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.data = None
+        self.selected_params = []
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Title
+        title = QLabel("<b>Statistics</b>")
+        title.setStyleSheet("font-size: 12pt;")
+        layout.addWidget(title)
+        
+        # Statistics table
+        self.table = QTableWidget()
+        self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.table)
+        
+        # Refresh button
+        btn_layout = QHBoxLayout()
+        self.btn_refresh = QPushButton("Refresh Statistics")
+        self.btn_refresh.clicked.connect(self.update_statistics)
+        btn_layout.addWidget(self.btn_refresh)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+        
+    def set_data(self, data: XDRData, selected_params: List[Dict]):
+        """Set data and update statistics"""
+        self.data = data
+        self.selected_params = selected_params
+        self.update_statistics()
+        
+    def update_statistics(self):
+        """Update statistics table"""
+        if not self.data or not self.selected_params:
+            self.table.clear()
+            self.table.setRowCount(0)
+            return
+        
+        headers = ['Parameter', 'Count', 'Min', 'Max', 'Mean', 'Median', 'Std Dev', 'Range']
+        self.table.setColumnCount(len(headers))
+        self.table.setHorizontalHeaderLabels(headers)
+        self.table.setRowCount(len(self.selected_params))
+        
+        for row, param in enumerate(self.selected_params):
+            stats = self.data.get_parameter_statistics(
+                param['index'], param['array_index']
+            )
+            
+            if not stats:
+                continue
+            
+            # Parameter name
+            self.table.setItem(row, 0, QTableWidgetItem(param['name']))
+            
+            # Statistics
+            self.table.setItem(row, 1, QTableWidgetItem(str(stats['count'])))
+            self.table.setItem(row, 2, QTableWidgetItem(f"{stats['min']:.4f}"))
+            self.table.setItem(row, 3, QTableWidgetItem(f"{stats['max']:.4f}"))
+            self.table.setItem(row, 4, QTableWidgetItem(f"{stats['mean']:.4f}"))
+            self.table.setItem(row, 5, QTableWidgetItem(f"{stats['median']:.4f}"))
+            self.table.setItem(row, 6, QTableWidgetItem(f"{stats['std']:.4f}"))
+            self.table.setItem(row, 7, QTableWidgetItem(f"{stats['range']:.4f}"))
+        
+        self.table.resizeColumnsToContents()
+
+
+class CorrelationWidget(QWidget):
+    """Widget for analyzing parameter correlations"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.data = None
+        self.selected_params = []
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Title
+        title = QLabel("<b>Parameter Correlation Analysis</b>")
+        title.setStyleSheet("font-size: 12pt;")
+        layout.addWidget(title)
+        
+        info = QLabel("Correlation coefficient ranges from -1 (negative correlation) to +1 (positive correlation)")
+        info.setWordWrap(True)
+        info.setStyleSheet("color: #aaaaaa; font-size: 9pt;")
+        layout.addWidget(info)
+        
+        # Correlation table
+        self.table = QTableWidget()
+        self.table.setAlternatingRowColors(True)
+        layout.addWidget(self.table)
+        
+        # Refresh button
+        btn_layout = QHBoxLayout()
+        self.btn_refresh = QPushButton("Calculate Correlations")
+        self.btn_refresh.clicked.connect(self.update_correlations)
+        btn_layout.addWidget(self.btn_refresh)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+        
+    def set_data(self, data: XDRData, selected_params: List[Dict]):
+        """Set data and update correlations"""
+        self.data = data
+        self.selected_params = selected_params
+        self.update_correlations()
+        
+    def update_correlations(self):
+        """Update correlation matrix"""
+        if not self.data or len(self.selected_params) < 2:
+            self.table.clear()
+            self.table.setRowCount(0)
+            if len(self.selected_params) < 2:
+                self.table.setColumnCount(1)
+                self.table.setHorizontalHeaderLabels(['Info'])
+                self.table.setRowCount(1)
+                self.table.setItem(0, 0, QTableWidgetItem("Select at least 2 parameters to analyze correlations"))
+            return
+        
+        n = len(self.selected_params)
+        param_names = [p['name'] for p in self.selected_params]
+        
+        self.table.setColumnCount(n + 1)
+        self.table.setRowCount(n)
+        
+        headers = ['Parameter'] + [self._short_name(name) for name in param_names]
+        self.table.setHorizontalHeaderLabels(headers)
+        
+        for i, param1 in enumerate(self.selected_params):
+            # Set row header
+            self.table.setItem(i, 0, QTableWidgetItem(self._short_name(param1['name'])))
+            
+            for j, param2 in enumerate(self.selected_params):
+                if i == j:
+                    # Diagonal - perfect correlation with itself
+                    item = QTableWidgetItem("1.00")
+                    item.setBackground(QColor(0, 200, 0, 100))
+                else:
+                    # Calculate correlation
+                    corr = self.data.calculate_correlation(
+                        param1['index'], param1['array_index'],
+                        param2['index'], param2['array_index']
+                    )
+                    
+                    item = QTableWidgetItem(f"{corr:.3f}")
+                    
+                    # Color code based on correlation strength
+                    abs_corr = abs(corr)
+                    if abs_corr > 0.7:
+                        color = QColor(0, 200, 0, 100) if corr > 0 else QColor(200, 0, 0, 100)
+                    elif abs_corr > 0.4:
+                        color = QColor(200, 200, 0, 80)
+                    else:
+                        color = QColor(100, 100, 100, 50)
+                    
+                    item.setBackground(color)
+                
+                self.table.setItem(i, j + 1, item)
+        
+        self.table.resizeColumnsToContents()
+    
+    def _short_name(self, name: str) -> str:
+        """Get shortened parameter name"""
+        if len(name) > 30:
+            parts = name.split('/')
+            if len(parts) > 2:
+                return f".../{parts[-1]}"
+        return name
+
+
 class MainWindow(QMainWindow):
     """Main application window"""
+    
+    MAX_RECENT_FILES = 10
     
     def __init__(self):
         super().__init__()
         self.data = XDRData()
         self.live_mode = False
+        self.time_range = None  # (start, end) or None for full range
+        
+        # Settings for persistent configuration
+        self.settings = QSettings('XBlackBox', 'XDRViewer')
         
         # Timer for live mode updates
         self.live_timer = QTimer(self)
         self.live_timer.setInterval(500)  # 500ms refresh interval
         self.live_timer.timeout.connect(self.on_live_timer)
         
+        # Enable drag and drop
+        self.setAcceptDrops(True)
+        
         self.setup_ui()
         self.setup_menu()
         self.setup_toolbar()
         
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        """Handle drag enter event"""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls and urls[0].toLocalFile().endswith('.xdr'):
+                event.acceptProposedAction()
+                
+    def dropEvent(self, event: QDropEvent):
+        """Handle drop event"""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls:
+                filepath = urls[0].toLocalFile()
+                if filepath.endswith('.xdr'):
+                    self.load_file(filepath)
+                    event.acceptProposedAction()
+        
     def setup_ui(self):
-        self.setWindowTitle("XBlackBox XDR Viewer")
+        self.setWindowTitle("XBlackBox XDR Viewer - Enhanced Edition")
         self.setMinimumSize(1200, 800)
         self.setStyleSheet(self.get_stylesheet())
         
@@ -847,6 +1174,35 @@ class MainWindow(QMainWindow):
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
         
+        # Time range selection
+        time_range_layout = QHBoxLayout()
+        time_range_layout.addWidget(QLabel("Time Range:"))
+        
+        self.spin_time_start = QDoubleSpinBox()
+        self.spin_time_start.setMinimum(0)
+        self.spin_time_start.setMaximum(99999)
+        self.spin_time_start.setValue(0)
+        self.spin_time_start.setSuffix(" s")
+        self.spin_time_start.valueChanged.connect(self.on_time_range_changed)
+        time_range_layout.addWidget(self.spin_time_start)
+        
+        time_range_layout.addWidget(QLabel("to"))
+        
+        self.spin_time_end = QDoubleSpinBox()
+        self.spin_time_end.setMinimum(0)
+        self.spin_time_end.setMaximum(99999)
+        self.spin_time_end.setValue(99999)
+        self.spin_time_end.setSuffix(" s")
+        self.spin_time_end.valueChanged.connect(self.on_time_range_changed)
+        time_range_layout.addWidget(self.spin_time_end)
+        
+        self.btn_reset_time_range = QPushButton("Reset")
+        self.btn_reset_time_range.clicked.connect(self.reset_time_range)
+        time_range_layout.addWidget(self.btn_reset_time_range)
+        
+        time_range_layout.addStretch()
+        right_layout.addLayout(time_range_layout)
+        
         # Plot options
         options_layout = QHBoxLayout()
         
@@ -858,6 +1214,11 @@ class MainWindow(QMainWindow):
         self.cb_grid.setChecked(True)
         self.cb_grid.stateChanged.connect(self.update_plot)
         options_layout.addWidget(self.cb_grid)
+        
+        self.cb_derivative = QCheckBox("Plot Derivative")
+        self.cb_derivative.setToolTip("Plot rate of change instead of raw values")
+        self.cb_derivative.stateChanged.connect(self.update_plot)
+        options_layout.addWidget(self.cb_derivative)
         
         options_layout.addSpacing(20)
         
@@ -903,6 +1264,14 @@ class MainWindow(QMainWindow):
         self.data_table = DataTableWidget()
         self.tabs.addTab(self.data_table, "Data Table")
         
+        # Statistics tab
+        self.statistics_widget = StatisticsWidget()
+        self.tabs.addTab(self.statistics_widget, "Statistics")
+        
+        # Correlation tab
+        self.correlation_widget = CorrelationWidget()
+        self.tabs.addTab(self.correlation_widget, "Correlation")
+        
         right_layout.addWidget(self.tabs, 1)
         
         splitter.addWidget(right_panel)
@@ -911,7 +1280,7 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(splitter)
         
         # Status bar
-        self.statusBar().showMessage("Ready - Open an XDR file to begin")
+        self.statusBar().showMessage("Ready - Open an XDR file or drag & drop to begin")
         
     def setup_menu(self):
         menubar = self.menuBar()
@@ -920,9 +1289,13 @@ class MainWindow(QMainWindow):
         file_menu = menubar.addMenu("&File")
         
         open_action = QAction("&Open XDR File...", self)
-        open_action.setShortcut("Ctrl+O")
+        open_action.setShortcut(QKeySequence.Open)
         open_action.triggered.connect(self.open_file)
         file_menu.addAction(open_action)
+        
+        # Recent files submenu
+        self.recent_files_menu = file_menu.addMenu("Recent Files")
+        self.update_recent_files_menu()
         
         file_menu.addSeparator()
         
@@ -932,26 +1305,59 @@ class MainWindow(QMainWindow):
         file_menu.addAction(export_csv_action)
         
         export_plot_action = QAction("Save Plot &Image...", self)
-        export_plot_action.setShortcut("Ctrl+S")
+        export_plot_action.setShortcut(QKeySequence.Save)
         export_plot_action.triggered.connect(self.save_plot)
         file_menu.addAction(export_plot_action)
         
         file_menu.addSeparator()
         
         exit_action = QAction("E&xit", self)
-        exit_action.setShortcut("Ctrl+Q")
+        exit_action.setShortcut(QKeySequence.Quit)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
         
         # View menu
         view_menu = menubar.addMenu("&View")
         
+        refresh_action = QAction("&Refresh Plot", self)
+        refresh_action.setShortcut(QKeySequence.Refresh)
+        refresh_action.triggered.connect(self.update_plot)
+        view_menu.addAction(refresh_action)
+        
         clear_plot_action = QAction("&Clear Plot", self)
+        clear_plot_action.setShortcut("Ctrl+L")
         clear_plot_action.triggered.connect(self.canvas.clear_plots)
         view_menu.addAction(clear_plot_action)
         
+        view_menu.addSeparator()
+        
+        zoom_in_action = QAction("Zoom &In", self)
+        zoom_in_action.setShortcut(QKeySequence.ZoomIn)
+        zoom_in_action.triggered.connect(self.zoom_in_plot)
+        view_menu.addAction(zoom_in_action)
+        
+        zoom_out_action = QAction("Zoom &Out", self)
+        zoom_out_action.setShortcut(QKeySequence.ZoomOut)
+        zoom_out_action.triggered.connect(self.zoom_out_plot)
+        view_menu.addAction(zoom_out_action)
+        
+        # Analysis menu
+        analysis_menu = menubar.addMenu("&Analysis")
+        
+        stats_action = QAction("Show &Statistics", self)
+        stats_action.setShortcut("Ctrl+T")
+        stats_action.triggered.connect(self.show_statistics_tab)
+        analysis_menu.addAction(stats_action)
+        
         # Help menu
         help_menu = menubar.addMenu("&Help")
+        
+        shortcuts_action = QAction("&Keyboard Shortcuts", self)
+        shortcuts_action.setShortcut(QKeySequence.HelpContents)
+        shortcuts_action.triggered.connect(self.show_shortcuts)
+        help_menu.addAction(shortcuts_action)
+        
+        help_menu.addSeparator()
         
         about_action = QAction("&About", self)
         about_action.triggered.connect(self.show_about)
@@ -980,16 +1386,141 @@ class MainWindow(QMainWindow):
         
         if not filepath:
             return
-            
+        
+        self.load_file(filepath)
+        
+    def load_file(self, filepath: str):
+        """Load an XDR file with progress dialog"""
         try:
+            # Show progress dialog
+            progress = QProgressDialog("Loading file...", "Cancel", 0, 100, self)
+            progress.setWindowModality(Qt.WindowModal)
+            progress.setValue(10)
+            
             self.data.read(filepath)
+            progress.setValue(50)
+            
+            # Update time range controls
+            if self.data.frames:
+                max_time = self.data.frames[-1]['timestamp']
+                self.spin_time_start.setMaximum(max_time)
+                self.spin_time_end.setMaximum(max_time)
+                self.spin_time_end.setValue(max_time)
+            
+            progress.setValue(70)
+            
             self.file_info.update_info(self.data)
             self.param_selector.set_parameters(self.data.get_all_plottable_parameters())
             self.data_table.set_data(self.data)
             self.canvas.clear_plots()
+            self.time_range = None
+            
+            progress.setValue(90)
+            
+            # Add to recent files
+            self.add_recent_file(filepath)
+            
+            progress.setValue(100)
+            progress.close()
+            
             self.statusBar().showMessage(f"Loaded: {filepath} ({len(self.data.frames)} frames)")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to open file:\n{str(e)}")
+    
+    def add_recent_file(self, filepath: str):
+        """Add file to recent files list"""
+        recent = self.settings.value('recent_files', [])
+        if not isinstance(recent, list):
+            recent = []
+        
+        # Remove if already in list
+        if filepath in recent:
+            recent.remove(filepath)
+        
+        # Add to front
+        recent.insert(0, filepath)
+        
+        # Keep only MAX_RECENT_FILES
+        recent = recent[:self.MAX_RECENT_FILES]
+        
+        self.settings.setValue('recent_files', recent)
+        self.update_recent_files_menu()
+    
+    def update_recent_files_menu(self):
+        """Update recent files menu"""
+        self.recent_files_menu.clear()
+        
+        recent = self.settings.value('recent_files', [])
+        if not isinstance(recent, list):
+            recent = []
+        
+        if not recent:
+            action = QAction("No recent files", self)
+            action.setEnabled(False)
+            self.recent_files_menu.addAction(action)
+            return
+        
+        for filepath in recent:
+            if Path(filepath).exists():
+                action = QAction(Path(filepath).name, self)
+                action.setToolTip(filepath)
+                action.triggered.connect(partial(self.load_file, filepath))
+                self.recent_files_menu.addAction(action)
+    
+    def on_time_range_changed(self):
+        """Handle time range change"""
+        start = self.spin_time_start.value()
+        end = self.spin_time_end.value()
+        
+        if start >= end:
+            return
+        
+        if self.data.frames:
+            max_time = self.data.frames[-1]['timestamp']
+            if start == 0 and end >= max_time:
+                self.time_range = None
+            else:
+                self.time_range = (start, end)
+    
+    def reset_time_range(self):
+        """Reset time range to full range"""
+        self.time_range = None
+        self.spin_time_start.setValue(0)
+        if self.data.frames:
+            self.spin_time_end.setValue(self.data.frames[-1]['timestamp'])
+        self.update_plot()
+    
+    def zoom_in_plot(self):
+        """Zoom in on plot"""
+        if self.time_range:
+            start, end = self.time_range
+            duration = end - start
+            new_duration = duration * 0.75
+            center = (start + end) / 2
+            self.spin_time_start.setValue(center - new_duration / 2)
+            self.spin_time_end.setValue(center + new_duration / 2)
+            self.on_time_range_changed()
+            self.update_plot()
+    
+    def zoom_out_plot(self):
+        """Zoom out on plot"""
+        if self.data.frames:
+            if self.time_range:
+                start, end = self.time_range
+                duration = end - start
+                new_duration = min(duration * 1.25, self.data.frames[-1]['timestamp'])
+                center = (start + end) / 2
+                self.spin_time_start.setValue(max(0, center - new_duration / 2))
+                self.spin_time_end.setValue(min(self.data.frames[-1]['timestamp'], center + new_duration / 2))
+                self.on_time_range_changed()
+                self.update_plot()
+    
+    def show_statistics_tab(self):
+        """Show statistics tab"""
+        self.tabs.setCurrentIndex(2)  # Statistics tab
+        selected = self.param_selector.get_selected_parameters()
+        if selected:
+            self.statistics_widget.set_data(self.data, selected)
             
     def update_plot(self):
         """Update the plot with selected parameters"""
@@ -998,15 +1529,45 @@ class MainWindow(QMainWindow):
         if not selected:
             self.canvas.clear_plots()
             return
+        
+        # Update statistics if on stats tab
+        if self.tabs.currentIndex() == 2:
+            self.statistics_widget.set_data(self.data, selected)
+        
+        # Update correlation if on correlation tab
+        if self.tabs.currentIndex() == 3:
+            self.correlation_widget.set_data(self.data, selected)
             
         self.canvas.plot_parameters(
             self.data,
             selected,
             separate_axes=self.cb_separate_axes.isChecked(),
-            show_grid=self.cb_grid.isChecked()
+            show_grid=self.cb_grid.isChecked(),
+            time_range=self.time_range,
+            plot_derivative=self.cb_derivative.isChecked()
         )
         
-        self.statusBar().showMessage(f"Plotting {len(selected)} parameter(s)")
+        mode = "derivative" if self.cb_derivative.isChecked() else "value"
+        self.statusBar().showMessage(f"Plotting {len(selected)} parameter(s) ({mode} mode)")
+        
+    def show_shortcuts(self):
+        """Show keyboard shortcuts help"""
+        shortcuts_text = """
+        <h3>Keyboard Shortcuts</h3>
+        <table cellpadding="5">
+        <tr><td><b>Ctrl+O</b></td><td>Open File</td></tr>
+        <tr><td><b>Ctrl+E</b></td><td>Export to CSV</td></tr>
+        <tr><td><b>Ctrl+S</b></td><td>Save Plot Image</td></tr>
+        <tr><td><b>Ctrl+Q</b></td><td>Quit Application</td></tr>
+        <tr><td><b>F5</b></td><td>Refresh Plot</td></tr>
+        <tr><td><b>Ctrl+L</b></td><td>Clear Plot</td></tr>
+        <tr><td><b>Ctrl++</b></td><td>Zoom In</td></tr>
+        <tr><td><b>Ctrl+-</b></td><td>Zoom Out</td></tr>
+        <tr><td><b>Ctrl+T</b></td><td>Show Statistics</td></tr>
+        <tr><td><b>F1</b></td><td>Help</td></tr>
+        </table>
+        """
+        QMessageBox.information(self, "Keyboard Shortcuts", shortcuts_text)
         
     def toggle_live_mode(self, state):
         """Toggle live mode on/off"""
@@ -1102,16 +1663,28 @@ class MainWindow(QMainWindow):
         QMessageBox.about(
             self,
             "About XBlackBox XDR Viewer",
-            """<h3>XBlackBox XDR Viewer</h3>
-            <p>Version 1.0</p>
+            """<h3>XBlackBox XDR Viewer - Enhanced Edition</h3>
+            <p>Version 2.0</p>
             <p>A tool for visualizing X-Plane flight data recordings from XBlackBox plugin.</p>
             <p><b>Features:</b></p>
             <ul>
                 <li>Open and parse .xdr flight data files</li>
-                <li>Plot any recorded parameter over time</li>
-                <li>Compare multiple parameters</li>
+                <li>Plot any recorded parameter over time with auto-downsampling</li>
+                <li>Live mode for real-time monitoring</li>
+                <li>Time range selection and zoom controls</li>
+                <li>Statistical analysis (min/max/mean/median/std)</li>
+                <li>Compare multiple parameters with color coding</li>
                 <li>Export data to CSV format</li>
-                <li>Save plots as images</li>
+                <li>Save plots as images (PNG/PDF/SVG)</li>
+                <li>Recent files menu</li>
+                <li>Drag and drop file opening</li>
+                <li>Keyboard shortcuts for efficiency</li>
+            </ul>
+            <p><b>Performance Optimizations:</b></p>
+            <ul>
+                <li>Automatic data downsampling for large datasets</li>
+                <li>Efficient memory usage</li>
+                <li>Fast plot rendering</li>
             </ul>
             """
         )

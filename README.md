@@ -2,6 +2,22 @@
 
 XBlackBox is a high-performance C++ plugin for X-Plane 12 that records comprehensive flight data in real-time, similar to a real aircraft's flight data recorder (black box).
 
+## 🆕 What's New - Enhanced XDR Viewer
+
+The XDR Viewer has been significantly enhanced with advanced analysis capabilities:
+
+### Key Enhancements
+- **📊 Statistics Analysis**: Min/Max/Mean/Median/Std Dev for all parameters
+- **🔗 Correlation Analysis**: Discover relationships between parameters
+- **📈 Derivative Plotting**: Visualize rate of change (d/dt)
+- **⏱️ Time Range Selection**: Focus on specific flight phases
+- **⚡ Performance Optimized**: Auto-downsampling for large datasets
+- **⌨️ Keyboard Shortcuts**: Fast workflow navigation
+- **📂 Recent Files**: Quick access to frequently used files
+- **🖱️ Drag & Drop**: Simple file opening
+
+See [VIEWER_GUIDE.md](VIEWER_GUIDE.md) for complete documentation.
+
 ## Features
 
 - **Real-time Recording**: Continuously records flight data at configurable intervals (20Hz to 0.2Hz)
@@ -262,6 +278,44 @@ The `.xdr` format is a binary format optimized for:
 ```
 
 See the [XBlackBox-SASL repository](https://github.com/CCA3370/XBlackBox-SASL) for detailed file format specification and Python reader utility.
+
+## Analyzing Recorded Data
+
+### XDR Viewer - Enhanced Edition
+
+The enhanced XDR Viewer provides powerful visualization and analysis capabilities:
+
+**Installation:**
+```bash
+pip install -r requirements.txt
+python xdr_viewer.py
+```
+
+**Key Features:**
+- **Interactive Plotting**: Plot any parameter over time with zoom and pan
+- **Statistics Analysis**: Automatic calculation of min/max/mean/median/std dev
+- **Correlation Analysis**: Discover relationships between parameters
+- **Derivative Mode**: Plot rate of change for any parameter
+- **Time Range Selection**: Focus analysis on specific flight phases
+- **Live Mode**: Monitor recordings in real-time as they're being written
+- **Export**: Save to CSV or export plots as PNG/PDF/SVG
+
+**Complete Documentation:** See [VIEWER_GUIDE.md](VIEWER_GUIDE.md) for detailed user guide.
+
+### Command-Line Reader
+
+For quick inspection and batch processing:
+
+```bash
+# View file summary
+python xdr_reader.py recording.xdr
+
+# Export to CSV
+python xdr_reader.py recording.xdr --export output.csv
+
+# Show all parameters
+python xdr_reader.py recording.xdr --datarefs
+```
 
 ## Performance Optimizations
 
