@@ -41,18 +41,8 @@ private:
     void CreateImGuiWindow();
     void UpdateImGuiInputs();
     
-    // Menu callbacks
-    static void MenuCallback_AutoMode(void* menuRef, void* itemRef);
-    static void MenuCallback_StartStop(void* menuRef, void* itemRef);
-    static void MenuCallback_LevelSimple(void* menuRef, void* itemRef);
-    static void MenuCallback_LevelNormal(void* menuRef, void* itemRef);
-    static void MenuCallback_LevelDetailed(void* menuRef, void* itemRef);
-    static void MenuCallback_Interval20Hz(void* menuRef, void* itemRef);
-    static void MenuCallback_Interval10Hz(void* menuRef, void* itemRef);
-    static void MenuCallback_Interval4Hz(void* menuRef, void* itemRef);
-    static void MenuCallback_Interval1Hz(void* menuRef, void* itemRef);
-    static void MenuCallback_ShowStatus(void* menuRef, void* itemRef);
-    static void MenuCallback_OpenFolder(void* menuRef, void* itemRef);
+    // Unified menu callback
+    static void MenuCallback(void* menuRef, void* itemRef);
     
     // Windows
     void DrawStatusWindow();
@@ -65,10 +55,21 @@ private:
     
     // Menu items
     XPLMMenuID m_menuID;
+    XPLMMenuID m_levelMenu;
+    XPLMMenuID m_intervalMenu;
     int m_menuItem_AutoMode;
     int m_menuItem_StartStop;
     int m_menuItem_ShowStatus;
     int m_menuItem_Settings;
+    
+    // Submenu items for checkmarks
+    int m_levelItem_Simple;
+    int m_levelItem_Normal;
+    int m_levelItem_Detailed;
+    int m_intervalItem_20Hz;
+    int m_intervalItem_10Hz;
+    int m_intervalItem_4Hz;
+    int m_intervalItem_1Hz;
     
     // UI state
     bool m_showStatusWindow;

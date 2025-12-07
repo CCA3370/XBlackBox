@@ -32,10 +32,19 @@ UIManager& UIManager::Instance() {
 
 UIManager::UIManager()
     : m_menuID(nullptr)
+    , m_levelMenu(nullptr)
+    , m_intervalMenu(nullptr)
     , m_menuItem_AutoMode(-1)
     , m_menuItem_StartStop(-1)
     , m_menuItem_ShowStatus(-1)
     , m_menuItem_Settings(-1)
+    , m_levelItem_Simple(-1)
+    , m_levelItem_Normal(-1)
+    , m_levelItem_Detailed(-1)
+    , m_intervalItem_20Hz(-1)
+    , m_intervalItem_10Hz(-1)
+    , m_intervalItem_4Hz(-1)
+    , m_intervalItem_1Hz(-1)
     , m_showStatusWindow(false)
     , m_showSettingsWindow(false)
     , m_imguiInitialized(false)
@@ -88,10 +97,10 @@ void UIManager::CreateMenu() {
         return;
     }
     
-    // Create our submenu with menu handler
+    // Create our submenu with unified menu handler
     int menuIndex = XPLMAppendMenuItem(pluginsMenu, "XBlackBox", nullptr, 0);
     m_menuID = XPLMCreateMenu("XBlackBox", pluginsMenu, menuIndex, 
-                               MenuCallback_AutoMode, nullptr);
+                               MenuCallback, nullptr);
     
     if (!m_menuID) {
         LogError("Failed to create menu");
@@ -111,27 +120,27 @@ void UIManager::CreateMenu() {
     
     // Recording level submenu
     int levelMenuItem = XPLMAppendMenuItem(m_menuID, "Recording Level", nullptr, 0);
-    XPLMMenuID levelMenu = XPLMCreateMenu("Recording Level", m_menuID, levelMenuItem,
-                                           MenuCallback_LevelSimple, nullptr);
-    XPLMAppendMenuItem(levelMenu, "Simple (Basic flight data)", 
-                       reinterpret_cast<void*>(1), 0);
-    XPLMAppendMenuItem(levelMenu, "Normal (+ Controls & systems)", 
-                       reinterpret_cast<void*>(2), 0);
-    XPLMAppendMenuItem(levelMenu, "Detailed (Everything)", 
-                       reinterpret_cast<void*>(3), 0);
+    m_levelMenu = XPLMCreateMenu("Recording Level", m_menuID, levelMenuItem,
+                                  MenuCallback, nullptr);
+    m_levelItem_Simple = XPLMAppendMenuItem(m_levelMenu, "Simple (Basic flight data)", 
+                       reinterpret_cast<void*>(10), 0);
+    m_levelItem_Normal = XPLMAppendMenuItem(m_levelMenu, "Normal (+ Controls & systems)", 
+                       reinterpret_cast<void*>(11), 0);
+    m_levelItem_Detailed = XPLMAppendMenuItem(m_levelMenu, "Detailed (Everything)", 
+                       reinterpret_cast<void*>(12), 0);
     
     // Recording interval submenu
     int intervalMenuItem = XPLMAppendMenuItem(m_menuID, "Recording Interval", nullptr, 0);
-    XPLMMenuID intervalMenu = XPLMCreateMenu("Recording Interval", m_menuID, intervalMenuItem,
-                                              MenuCallback_Interval20Hz, nullptr);
-    XPLMAppendMenuItem(intervalMenu, "20 Hz (0.05 sec) - Very Fast", 
+    m_intervalMenu = XPLMCreateMenu("Recording Interval", m_menuID, intervalMenuItem,
+                                     MenuCallback, nullptr);
+    m_intervalItem_20Hz = XPLMAppendMenuItem(m_intervalMenu, "20 Hz (0.05 sec) - Very Fast", 
                        reinterpret_cast<void*>(20), 0);
-    XPLMAppendMenuItem(intervalMenu, "10 Hz (0.10 sec) - Fast", 
-                       reinterpret_cast<void*>(10), 0);
-    XPLMAppendMenuItem(intervalMenu, "4 Hz (0.25 sec) - Normal", 
-                       reinterpret_cast<void*>(4), 0);
-    XPLMAppendMenuItem(intervalMenu, "1 Hz (1.0 sec) - Slow", 
-                       reinterpret_cast<void*>(1), 0);
+    m_intervalItem_10Hz = XPLMAppendMenuItem(m_intervalMenu, "10 Hz (0.10 sec) - Fast", 
+                       reinterpret_cast<void*>(21), 0);
+    m_intervalItem_4Hz = XPLMAppendMenuItem(m_intervalMenu, "4 Hz (0.25 sec) - Normal", 
+                       reinterpret_cast<void*>(22), 0);
+    m_intervalItem_1Hz = XPLMAppendMenuItem(m_intervalMenu, "1 Hz (1.0 sec) - Slow", 
+                       reinterpret_cast<void*>(23), 0);
     
     // Separator
     XPLMAppendMenuSeparator(m_menuID);
@@ -161,6 +170,30 @@ void UIManager::UpdateMenu() {
     // Update start/stop text
     XPLMSetMenuItemName(m_menuID, m_menuItem_StartStop,
                         Recorder::Instance().IsRecording() ? "Stop Recording" : "Start Recording", 0);
+    
+    // Update recording level checkmarks
+    if (m_levelMenu) {
+        RecordingLevel currentLevel = Settings::Instance().GetRecordingLevel();
+        XPLMCheckMenuItem(m_levelMenu, m_levelItem_Simple, 
+                         currentLevel == RecordingLevel::Simple ? xplm_Menu_Checked : xplm_Menu_Unchecked);
+        XPLMCheckMenuItem(m_levelMenu, m_levelItem_Normal, 
+                         currentLevel == RecordingLevel::Normal ? xplm_Menu_Checked : xplm_Menu_Unchecked);
+        XPLMCheckMenuItem(m_levelMenu, m_levelItem_Detailed, 
+                         currentLevel == RecordingLevel::Detailed ? xplm_Menu_Checked : xplm_Menu_Unchecked);
+    }
+    
+    // Update recording interval checkmarks
+    if (m_intervalMenu) {
+        float currentInterval = Settings::Instance().GetRecordingInterval();
+        XPLMCheckMenuItem(m_intervalMenu, m_intervalItem_20Hz, 
+                         (currentInterval <= 0.051f && currentInterval >= 0.049f) ? xplm_Menu_Checked : xplm_Menu_Unchecked);
+        XPLMCheckMenuItem(m_intervalMenu, m_intervalItem_10Hz, 
+                         (currentInterval <= 0.101f && currentInterval >= 0.099f) ? xplm_Menu_Checked : xplm_Menu_Unchecked);
+        XPLMCheckMenuItem(m_intervalMenu, m_intervalItem_4Hz, 
+                         (currentInterval <= 0.251f && currentInterval >= 0.249f) ? xplm_Menu_Checked : xplm_Menu_Unchecked);
+        XPLMCheckMenuItem(m_intervalMenu, m_intervalItem_1Hz, 
+                         (currentInterval <= 1.01f && currentInterval >= 0.99f) ? xplm_Menu_Checked : xplm_Menu_Unchecked);
+    }
 }
 
 void UIManager::ShowNotification(const std::string& message) {
@@ -169,21 +202,22 @@ void UIManager::ShowNotification(const std::string& message) {
     LogInfo(message);
 }
 
-// Menu callbacks
-void UIManager::MenuCallback_AutoMode(void* menuRef, void* itemRef) {
+// Unified menu callback
+void UIManager::MenuCallback(void* menuRef, void* itemRef) {
     (void)menuRef;  // Unused
     int item = reinterpret_cast<intptr_t>(itemRef);
     
-    // Auto mode toggle
+    // Main menu items
     if (item == 0) {
+        // Auto mode toggle
         bool newMode = !Settings::Instance().GetAutoMode();
         Settings::Instance().SetAutoMode(newMode);
         Settings::Instance().Save();
         UIManager::Instance().UpdateMenu();
         UIManager::Instance().ShowNotification("Auto mode " + std::string(newMode ? "enabled" : "disabled"));
     }
-    // Start/Stop recording
     else if (item == 1) {
+        // Start/Stop recording
         if (Recorder::Instance().IsRecording()) {
             Recorder::Instance().Stop();
             UIManager::Instance().ShowNotification("Recording stopped");
@@ -193,95 +227,58 @@ void UIManager::MenuCallback_AutoMode(void* menuRef, void* itemRef) {
         }
         UIManager::Instance().UpdateMenu();
     }
-    // Show status
     else if (item == 2) {
+        // Show status
         UIManager::Instance().ToggleStatusWindow();
     }
-    // Open folder
     else if (item == 3) {
+        // Open folder
         UIManager::Instance().OpenOutputFolder();
     }
-    // Settings
     else if (item == 4) {
+        // Settings
         UIManager::Instance().ToggleSettingsWindow();
     }
-}
-
-void UIManager::MenuCallback_LevelSimple(void* menuRef, void* itemRef) {
-    (void)menuRef;  // Unused
-    int item = reinterpret_cast<intptr_t>(itemRef);
-    
-    RecordingLevel level;
-    std::string levelName;
-    
-    if (item == 1) {
-        level = RecordingLevel::Simple;
-        levelName = "Simple";
-    } else if (item == 2) {
-        level = RecordingLevel::Normal;
-        levelName = "Normal";
-    } else if (item == 3) {
-        level = RecordingLevel::Detailed;
-        levelName = "Detailed";
-    } else {
-        return;
+    // Recording level submenu items (10-12)
+    else if (item >= 10 && item <= 12) {
+        RecordingLevel level;
+        std::string levelName;
+        
+        if (item == 10) {
+            level = RecordingLevel::Simple;
+            levelName = "Simple";
+        } else if (item == 11) {
+            level = RecordingLevel::Normal;
+            levelName = "Normal";
+        } else {
+            level = RecordingLevel::Detailed;
+            levelName = "Detailed";
+        }
+        
+        Settings::Instance().SetRecordingLevel(level);
+        DatarefManager::Instance().Reload();
+        Settings::Instance().Save();
+        UIManager::Instance().UpdateMenu();
+        UIManager::Instance().ShowNotification("Recording level: " + levelName);
     }
-    
-    Settings::Instance().SetRecordingLevel(level);
-    DatarefManager::Instance().Reload();
-    Settings::Instance().Save();
-    UIManager::Instance().ShowNotification("Recording level: " + levelName);
-}
-
-void UIManager::MenuCallback_LevelNormal(void* menuRef, void* itemRef) {
-    MenuCallback_LevelSimple(menuRef, itemRef);
-}
-
-void UIManager::MenuCallback_LevelDetailed(void* menuRef, void* itemRef) {
-    MenuCallback_LevelSimple(menuRef, itemRef);
-}
-
-void UIManager::MenuCallback_Interval20Hz(void* menuRef, void* itemRef) {
-    (void)menuRef;  // Unused
-    int hz = reinterpret_cast<intptr_t>(itemRef);
-    float interval;
-    std::string name;
-    
-    switch (hz) {
-        case 20: interval = 0.05f; name = "20 Hz"; break;
-        case 10: interval = 0.10f; name = "10 Hz"; break;
-        case 4: interval = 0.25f; name = "4 Hz"; break;
-        case 1: interval = 1.0f; name = "1 Hz"; break;
-        default: return;
+    // Recording interval submenu items (20-23)
+    else if (item >= 20 && item <= 23) {
+        float interval;
+        std::string name;
+        
+        switch (item) {
+            case 20: interval = 0.05f; name = "20 Hz"; break;
+            case 21: interval = 0.10f; name = "10 Hz"; break;
+            case 22: interval = 0.25f; name = "4 Hz"; break;
+            case 23: interval = 1.0f; name = "1 Hz"; break;
+            default: return;
+        }
+        
+        Settings::Instance().SetRecordingInterval(interval);
+        Settings::Instance().Save();
+        UIManager::Instance().UpdateMenu();
+        UIManager::Instance().ShowNotification("Recording interval: " + name);
     }
-    
-    Settings::Instance().SetRecordingInterval(interval);
-    Settings::Instance().Save();
-    UIManager::Instance().ShowNotification("Recording interval: " + name);
-}
-
-void UIManager::MenuCallback_Interval10Hz(void* menuRef, void* itemRef) {
-    MenuCallback_Interval20Hz(menuRef, itemRef);
-}
-
-void UIManager::MenuCallback_Interval4Hz(void* menuRef, void* itemRef) {
-    MenuCallback_Interval20Hz(menuRef, itemRef);
-}
-
-void UIManager::MenuCallback_Interval1Hz(void* menuRef, void* itemRef) {
-    MenuCallback_Interval20Hz(menuRef, itemRef);
-}
-
-void UIManager::MenuCallback_ShowStatus(void* menuRef, void* itemRef) {
-    (void)menuRef;  // Unused
-    (void)itemRef;  // Unused
-    UIManager::Instance().m_showStatusWindow = !UIManager::Instance().m_showStatusWindow;
-}
-
-void UIManager::MenuCallback_OpenFolder(void* menuRef, void* itemRef) {
-    (void)menuRef;  // Unused
-    (void)itemRef;  // Unused
-    UIManager::Instance().OpenOutputFolder();
 }
 
 void UIManager::OpenOutputFolder() {
