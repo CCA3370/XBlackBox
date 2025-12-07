@@ -344,9 +344,33 @@ See the [XBlackBox-SASL repository](https://github.com/CCA3370/XBlackBox-SASL) f
 
 ## Analyzing Recorded Data
 
-### XDR Viewer - Enhanced Edition
+### XDR Viewer - Tauri Desktop Application
 
-The enhanced XDR Viewer provides powerful visualization and analysis capabilities:
+**NEW**: The XDR Viewer is now available as a cross-platform desktop application built with Tauri!
+
+The Tauri version combines the power of Rust for fast XDR parsing with a modern web-based UI. It provides all the features of the original viewer as a native desktop application without requiring Python or a web server.
+
+**Installation & Usage:**
+```bash
+cd web_viewer
+npm install
+npm run build
+```
+
+See [web_viewer/README.md](web_viewer/README.md) for complete documentation on building and running the Tauri app.
+
+**Key Features:**
+- **Native Desktop App**: Runs on Windows, macOS, and Linux
+- **Fast Rust Backend**: High-performance XDR file parsing
+- **Interactive Visualizations**: Plotly-based charts with zoom and pan
+- **Statistics & Correlation**: Built-in parameter analysis
+- **Flight Path Visualization**: 3D flight trajectory rendering
+- **Data Export**: Export to CSV format
+- **Multiple Themes**: Dark, Light, and High Contrast modes
+
+### XDR Viewer - Python/Qt Edition (Legacy)
+
+The original Python-based XDR Viewer is still available for users who prefer it:
 
 **Installation:**
 ```bash
