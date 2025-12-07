@@ -43,10 +43,16 @@ TRANSLATIONS = {
         'theme_dark': 'Dark Theme',
         'theme_light': 'Light Theme',
         'theme_high_contrast': 'High Contrast',
+        'theme_blue': 'Blue Theme',
+        'theme_solarized_dark': 'Solarized Dark',
+        'theme_nord': 'Nord Theme',
         
         # Language menu
         'lang_english': 'English',
         'lang_chinese': '中文 (Chinese)',
+        'lang_japanese': '日本語 (Japanese)',
+        'lang_spanish': 'Español (Spanish)',
+        'lang_french': 'Français (French)',
         'lang_system': 'Follow System',
         
         # Help menu
@@ -266,10 +272,16 @@ TRANSLATIONS = {
         'theme_dark': '深色主题',
         'theme_light': '浅色主题',
         'theme_high_contrast': '高对比度',
+        'theme_blue': '蓝色主题',
+        'theme_solarized_dark': 'Solarized 深色',
+        'theme_nord': 'Nord 主题',
         
         # Language menu
         'lang_english': 'English',
         'lang_chinese': '中文 (Chinese)',
+        'lang_japanese': '日本語 (Japanese)',
+        'lang_spanish': 'Español (Spanish)',
+        'lang_french': 'Français (French)',
         'lang_system': '跟随系统',
         
         # Help menu
@@ -447,12 +459,474 @@ TRANSLATIONS = {
         # Plot labels
         'plot_time': '时间（秒）',
         'plot_value': '值',
-        'plot_rate': '变化率',
-        'plot_frequency': '频率 (Hz)',
-        'plot_magnitude': '幅度',
-        'plot_longitude': '经度',
-        'plot_latitude': '纬度',
-        'plot_altitude': '高度 (英尺)',
+        'plot_rate': '変化率',
+        'plot_frequency': '周波数 (Hz)',
+        'plot_magnitude': '大きさ',
+        'plot_longitude': '経度',
+        'plot_latitude': '緯度',
+        'plot_altitude': '高度 (フィート)',
+    },
+    'ja_JP': {
+        # Window title
+        'window_title': 'XBlackBox XDR ビューア - モダンエディション',
+        
+        # Menu items
+        'menu_file': 'ファイル(&F)',
+        'menu_view': '表示(&V)',
+        'menu_analysis': '分析(&A)',
+        'menu_help': 'ヘルプ(&H)',
+        'menu_theme': 'テーマ(&T)',
+        'menu_language': '言語(&L)',
+        
+        # File menu
+        'action_open': 'XDR ファイルを開く(&O)...',
+        'action_recent': '最近使用したファイル',
+        'action_export_csv': 'CSV にエクスポート(&C)...',
+        'action_save_plot': 'プロット画像を保存(&I)...',
+        'action_exit': '終了(&X)',
+        'no_recent_files': '最近使用したファイルはありません',
+        
+        # View menu
+        'action_refresh': 'プロットを更新(&R)',
+        'action_clear_plot': 'プロットをクリア(&C)',
+        'action_zoom_in': 'ズームイン(&I)',
+        'action_zoom_out': 'ズームアウト(&O)',
+        
+        # Analysis menu
+        'action_statistics': '統計を表示(&S)',
+        'action_fft': '周波数分析を表示(&F)',
+        'action_3d_path': '3D 飛行経路を表示(&3)',
+        
+        # Theme menu
+        'theme_dark': 'ダークテーマ',
+        'theme_light': 'ライトテーマ',
+        'theme_high_contrast': 'ハイコントラスト',
+        'theme_blue': 'ブルーテーマ',
+        'theme_solarized_dark': 'Solarized ダーク',
+        'theme_nord': 'Nord テーマ',
+        
+        # Language menu
+        'lang_english': 'English',
+        'lang_chinese': '中文 (Chinese)',
+        'lang_japanese': '日本語 (Japanese)',
+        'lang_spanish': 'Español (Spanish)',
+        'lang_french': 'Français (French)',
+        'lang_system': 'システムに従う',
+        
+        # Help menu
+        'action_shortcuts': 'キーボードショートカット(&K)',
+        'action_about': 'について(&A)',
+        
+        # Toolbar
+        'toolbar_open': '開く',
+        'toolbar_export': 'CSV エクスポート',
+        
+        # File info
+        'file_info_no_file': 'ファイルが読み込まれていません',
+        'file_info_title': 'XDR ファイルを開いて開始',
+        'file_info_status_complete': '完了',
+        'file_info_status_recording': '記録中...',
+        'file_info_level': 'レベル:',
+        'file_info_interval': '間隔:',
+        'file_info_start': '開始:',
+        'file_info_end': '終了:',
+        'file_info_duration': '期間:',
+        'file_info_frames': 'フレーム:',
+        'file_info_parameters': 'パラメータ:',
+        'file_info_size': 'サイズ:',
+        'file_info_in_progress': '進行中',
+        'file_info_ongoing': '進行中',
+        'file_info_so_far': 'これまで',
+        
+        # Parameters panel
+        'param_group_title': 'プロットするパラメータ',
+        'param_filter': 'フィルタ:',
+        'param_select_all': '✓ すべて選択',
+        'param_clear_all': '✗ すべてクリア',
+        'param_select_all_tooltip': 'すべての表示パラメータを選択',
+        'param_clear_all_tooltip': 'すべてのパラメータの選択を解除',
+        
+        # Plot controls
+        'time_range_label': '⏱️ 時間範囲:',
+        'time_range_reset': '🔄 リセット',
+        'time_range_reset_tooltip': '完全な時間範囲にリセット',
+        'plot_options_label': '📊 プロットオプション:',
+        'option_separate_axes': '軸を分離',
+        'option_separate_axes_tooltip': '各パラメータを独自のY軸にプロット',
+        'option_grid': 'グリッド',
+        'option_grid_tooltip': 'プロットにグリッド線を表示',
+        'option_derivative': '微分',
+        'option_derivative_tooltip': '生の値の代わりに変化率 (d/dt) をプロット',
+        'option_live_mode': '🔴 ライブモード',
+        'option_live_mode_tooltip': 'リアルタイムで記録を監視',
+        'btn_update_plot': '🔄 プロットを更新',
+        'btn_update_plot_tooltip': '現在の選択でプロットを更新 (F5)',
+        
+        # Tab names
+        'tab_plot': 'プロット',
+        'tab_data_table': 'データテーブル',
+        'tab_statistics': '統計',
+        'tab_correlation': '相関',
+        'tab_fft': '周波数分析',
+        'tab_3d_path': '3D 飛行経路',
+        
+        # Statistics
+        'stats_title': '📊 統計分析',
+        'stats_refresh': '統計を更新',
+        'stats_parameter': 'パラメータ',
+        'stats_count': 'カウント',
+        'stats_min': '最小',
+        'stats_max': '最大',
+        'stats_mean': '平均',
+        'stats_median': '中央値',
+        'stats_std': '標準偏差',
+        'stats_range': '範囲',
+        
+        # Status bar
+        'status_ready': '準備完了 - XDR ファイルを開くかドラッグ&ドロップして開始 🚀',
+        'status_loaded': '読み込み済み:',
+        'status_frames': 'フレーム',
+        'status_plotting': 'プロット中',
+        'status_parameters': 'パラメータ',
+        
+        # Dialogs
+        'dialog_open_title': 'XDR ファイルを開く',
+        'dialog_export_title': 'CSV にエクスポート',
+        'dialog_save_plot_title': 'プロットを保存',
+        'dialog_error': 'エラー',
+        'dialog_warning': '警告',
+        'dialog_success': '成功',
+        'dialog_info': '情報',
+        'error_load_file': 'ファイルを開けませんでした:',
+        'warning_no_file': '最初に XDR ファイルを開いてください。',
+        'loading_file': 'ファイルを読み込み中...',
+        'loading_cancel': 'キャンセル',
+        
+        # About dialog
+        'about_title': 'XBlackBox XDR ビューアについて',
+        'about_version': 'モダンエディション v3.0',
+        'about_description': 'XBlackBox プラグインの X-Plane 飛行データ記録を視覚化するための強力なツール。',
+        
+        # Other
+        'restart_required': '言語の変更を有効にするには、アプリケーションを再起動してください。',
+        
+        # Plot labels
+        'plot_time': '時間（秒）',
+        'plot_value': '値',
+        'plot_rate': '変化率',
+        'plot_frequency': '周波数 (Hz)',
+        'plot_magnitude': '大きさ',
+        'plot_longitude': '経度',
+        'plot_latitude': '緯度',
+        'plot_altitude': '高度 (フィート)',
+    },
+    'es_ES': {
+        # Window title
+        'window_title': 'XBlackBox XDR Viewer - Edición Moderna',
+        
+        # Menu items
+        'menu_file': '&Archivo',
+        'menu_view': '&Ver',
+        'menu_analysis': '&Análisis',
+        'menu_help': '&Ayuda',
+        'menu_theme': '&Tema',
+        'menu_language': '&Idioma',
+        
+        # File menu
+        'action_open': '&Abrir archivo XDR...',
+        'action_recent': 'Archivos recientes',
+        'action_export_csv': 'Exportar a &CSV...',
+        'action_save_plot': 'Guardar imagen del &gráfico...',
+        'action_exit': '&Salir',
+        'no_recent_files': 'Sin archivos recientes',
+        
+        # View menu
+        'action_refresh': '&Actualizar gráfico',
+        'action_clear_plot': '&Limpiar gráfico',
+        'action_zoom_in': '&Acercar',
+        'action_zoom_out': 'A&lejar',
+        
+        # Analysis menu
+        'action_statistics': 'Mostrar &estadísticas',
+        'action_fft': 'Mostrar análisis de &frecuencia',
+        'action_3d_path': 'Mostrar ruta de vuelo en &3D',
+        
+        # Theme menu
+        'theme_dark': 'Tema oscuro',
+        'theme_light': 'Tema claro',
+        'theme_high_contrast': 'Alto contraste',
+        'theme_blue': 'Tema azul',
+        'theme_solarized_dark': 'Solarized oscuro',
+        'theme_nord': 'Tema Nord',
+        
+        # Language menu
+        'lang_english': 'English',
+        'lang_chinese': '中文 (Chinese)',
+        'lang_japanese': '日本語 (Japanese)',
+        'lang_spanish': 'Español (Spanish)',
+        'lang_french': 'Français (French)',
+        'lang_system': 'Seguir sistema',
+        
+        # Help menu
+        'action_shortcuts': 'Atajos de &teclado',
+        'action_about': '&Acerca de',
+        
+        # Toolbar
+        'toolbar_open': 'Abrir',
+        'toolbar_export': 'Exportar CSV',
+        
+        # File info
+        'file_info_no_file': 'Ningún archivo cargado',
+        'file_info_title': 'Abra un archivo XDR para comenzar',
+        'file_info_status_complete': 'Completo',
+        'file_info_status_recording': 'Grabando...',
+        'file_info_level': 'Nivel:',
+        'file_info_interval': 'Intervalo:',
+        'file_info_start': 'Inicio:',
+        'file_info_end': 'Fin:',
+        'file_info_duration': 'Duración:',
+        'file_info_frames': 'Cuadros:',
+        'file_info_parameters': 'Parámetros:',
+        'file_info_size': 'Tamaño:',
+        'file_info_in_progress': 'En progreso',
+        'file_info_ongoing': 'en curso',
+        'file_info_so_far': 'hasta ahora',
+        
+        # Parameters panel
+        'param_group_title': 'Parámetros a graficar',
+        'param_filter': 'Filtro:',
+        'param_select_all': '✓ Seleccionar todo',
+        'param_clear_all': '✗ Limpiar todo',
+        'param_select_all_tooltip': 'Seleccionar todos los parámetros visibles',
+        'param_clear_all_tooltip': 'Deseleccionar todos los parámetros',
+        
+        # Plot controls
+        'time_range_label': '⏱️ Rango de tiempo:',
+        'time_range_reset': '🔄 Restablecer',
+        'time_range_reset_tooltip': 'Restablecer al rango de tiempo completo',
+        'plot_options_label': '📊 Opciones de gráfico:',
+        'option_separate_axes': 'Ejes separados',
+        'option_separate_axes_tooltip': 'Graficar cada parámetro en su propio eje Y',
+        'option_grid': 'Cuadrícula',
+        'option_grid_tooltip': 'Mostrar líneas de cuadrícula en los gráficos',
+        'option_derivative': 'Derivada',
+        'option_derivative_tooltip': 'Graficar tasa de cambio (d/dt) en lugar de valores sin procesar',
+        'option_live_mode': '🔴 Modo en vivo',
+        'option_live_mode_tooltip': 'Monitorear grabación en tiempo real',
+        'btn_update_plot': '🔄 Actualizar gráfico',
+        'btn_update_plot_tooltip': 'Actualizar gráfico con selección actual (F5)',
+        
+        # Tab names
+        'tab_plot': 'Gráfico',
+        'tab_data_table': 'Tabla de datos',
+        'tab_statistics': 'Estadísticas',
+        'tab_correlation': 'Correlación',
+        'tab_fft': 'Análisis de frecuencia',
+        'tab_3d_path': 'Ruta de vuelo 3D',
+        
+        # Statistics
+        'stats_title': '📊 Análisis estadístico',
+        'stats_refresh': 'Actualizar estadísticas',
+        'stats_parameter': 'Parámetro',
+        'stats_count': 'Recuento',
+        'stats_min': 'Mínimo',
+        'stats_max': 'Máximo',
+        'stats_mean': 'Media',
+        'stats_median': 'Mediana',
+        'stats_std': 'Desv. estándar',
+        'stats_range': 'Rango',
+        
+        # Status bar
+        'status_ready': 'Listo - Abra un archivo XDR o arrastre y suelte para comenzar 🚀',
+        'status_loaded': 'Cargado:',
+        'status_frames': 'cuadros',
+        'status_plotting': 'Graficando',
+        'status_parameters': 'parámetro(s)',
+        
+        # Dialogs
+        'dialog_open_title': 'Abrir archivo XDR',
+        'dialog_export_title': 'Exportar a CSV',
+        'dialog_save_plot_title': 'Guardar gráfico',
+        'dialog_error': 'Error',
+        'dialog_warning': 'Advertencia',
+        'dialog_success': 'Éxito',
+        'dialog_info': 'Información',
+        'error_load_file': 'Error al abrir el archivo:',
+        'warning_no_file': 'Por favor, abra primero un archivo XDR.',
+        'loading_file': 'Cargando archivo...',
+        'loading_cancel': 'Cancelar',
+        
+        # About dialog
+        'about_title': 'Acerca de XBlackBox XDR Viewer',
+        'about_version': 'Edición Moderna v3.0',
+        'about_description': 'Una herramienta potente para visualizar grabaciones de datos de vuelo de X-Plane del complemento XBlackBox.',
+        
+        # Other
+        'restart_required': 'Reinicie la aplicación para que los cambios de idioma surtan efecto.',
+        
+        # Plot labels
+        'plot_time': 'Tiempo (segundos)',
+        'plot_value': 'Valor',
+        'plot_rate': 'Tasa de cambio',
+        'plot_frequency': 'Frecuencia (Hz)',
+        'plot_magnitude': 'Magnitud',
+        'plot_longitude': 'Longitud',
+        'plot_latitude': 'Latitud',
+        'plot_altitude': 'Altitud (pies)',
+    },
+    'fr_FR': {
+        # Window title
+        'window_title': 'XBlackBox XDR Viewer - Édition Moderne',
+        
+        # Menu items
+        'menu_file': '&Fichier',
+        'menu_view': '&Affichage',
+        'menu_analysis': '&Analyse',
+        'menu_help': '&Aide',
+        'menu_theme': '&Thème',
+        'menu_language': '&Langue',
+        
+        # File menu
+        'action_open': '&Ouvrir un fichier XDR...',
+        'action_recent': 'Fichiers récents',
+        'action_export_csv': 'Exporter vers &CSV...',
+        'action_save_plot': 'Enregistrer l\'&image du graphique...',
+        'action_exit': '&Quitter',
+        'no_recent_files': 'Aucun fichier récent',
+        
+        # View menu
+        'action_refresh': '&Actualiser le graphique',
+        'action_clear_plot': '&Effacer le graphique',
+        'action_zoom_in': 'Zoom &avant',
+        'action_zoom_out': 'Zoom &arrière',
+        
+        # Analysis menu
+        'action_statistics': 'Afficher les &statistiques',
+        'action_fft': 'Afficher l\'analyse de &fréquence',
+        'action_3d_path': 'Afficher la trajectoire de vol en &3D',
+        
+        # Theme menu
+        'theme_dark': 'Thème sombre',
+        'theme_light': 'Thème clair',
+        'theme_high_contrast': 'Contraste élevé',
+        'theme_blue': 'Thème bleu',
+        'theme_solarized_dark': 'Solarized sombre',
+        'theme_nord': 'Thème Nord',
+        
+        # Language menu
+        'lang_english': 'English',
+        'lang_chinese': '中文 (Chinese)',
+        'lang_japanese': '日本語 (Japanese)',
+        'lang_spanish': 'Español (Spanish)',
+        'lang_french': 'Français (French)',
+        'lang_system': 'Suivre le système',
+        
+        # Help menu
+        'action_shortcuts': 'Raccourcis &clavier',
+        'action_about': 'À &propos',
+        
+        # Toolbar
+        'toolbar_open': 'Ouvrir',
+        'toolbar_export': 'Exporter CSV',
+        
+        # File info
+        'file_info_no_file': 'Aucun fichier chargé',
+        'file_info_title': 'Ouvrez un fichier XDR pour commencer',
+        'file_info_status_complete': 'Terminé',
+        'file_info_status_recording': 'Enregistrement...',
+        'file_info_level': 'Niveau :',
+        'file_info_interval': 'Intervalle :',
+        'file_info_start': 'Début :',
+        'file_info_end': 'Fin :',
+        'file_info_duration': 'Durée :',
+        'file_info_frames': 'Images :',
+        'file_info_parameters': 'Paramètres :',
+        'file_info_size': 'Taille :',
+        'file_info_in_progress': 'En cours',
+        'file_info_ongoing': 'en cours',
+        'file_info_so_far': 'jusqu\'à présent',
+        
+        # Parameters panel
+        'param_group_title': 'Paramètres à tracer',
+        'param_filter': 'Filtre :',
+        'param_select_all': '✓ Tout sélectionner',
+        'param_clear_all': '✗ Tout effacer',
+        'param_select_all_tooltip': 'Sélectionner tous les paramètres visibles',
+        'param_clear_all_tooltip': 'Désélectionner tous les paramètres',
+        
+        # Plot controls
+        'time_range_label': '⏱️ Plage de temps :',
+        'time_range_reset': '🔄 Réinitialiser',
+        'time_range_reset_tooltip': 'Réinitialiser à la plage de temps complète',
+        'plot_options_label': '📊 Options de graphique :',
+        'option_separate_axes': 'Axes séparés',
+        'option_separate_axes_tooltip': 'Tracer chaque paramètre sur son propre axe Y',
+        'option_grid': 'Grille',
+        'option_grid_tooltip': 'Afficher les lignes de grille sur les graphiques',
+        'option_derivative': 'Dérivée',
+        'option_derivative_tooltip': 'Tracer le taux de changement (d/dt) au lieu des valeurs brutes',
+        'option_live_mode': '🔴 Mode en direct',
+        'option_live_mode_tooltip': 'Surveiller l\'enregistrement en temps réel',
+        'btn_update_plot': '🔄 Actualiser le graphique',
+        'btn_update_plot_tooltip': 'Actualiser le graphique avec la sélection actuelle (F5)',
+        
+        # Tab names
+        'tab_plot': 'Graphique',
+        'tab_data_table': 'Table de données',
+        'tab_statistics': 'Statistiques',
+        'tab_correlation': 'Corrélation',
+        'tab_fft': 'Analyse de fréquence',
+        'tab_3d_path': 'Trajectoire de vol 3D',
+        
+        # Statistics
+        'stats_title': '📊 Analyse statistique',
+        'stats_refresh': 'Actualiser les statistiques',
+        'stats_parameter': 'Paramètre',
+        'stats_count': 'Nombre',
+        'stats_min': 'Minimum',
+        'stats_max': 'Maximum',
+        'stats_mean': 'Moyenne',
+        'stats_median': 'Médiane',
+        'stats_std': 'Écart type',
+        'stats_range': 'Plage',
+        
+        # Status bar
+        'status_ready': 'Prêt - Ouvrez un fichier XDR ou glissez-déposez pour commencer 🚀',
+        'status_loaded': 'Chargé :',
+        'status_frames': 'images',
+        'status_plotting': 'Traçage',
+        'status_parameters': 'paramètre(s)',
+        
+        # Dialogs
+        'dialog_open_title': 'Ouvrir un fichier XDR',
+        'dialog_export_title': 'Exporter vers CSV',
+        'dialog_save_plot_title': 'Enregistrer le graphique',
+        'dialog_error': 'Erreur',
+        'dialog_warning': 'Avertissement',
+        'dialog_success': 'Succès',
+        'dialog_info': 'Information',
+        'error_load_file': 'Échec de l\'ouverture du fichier :',
+        'warning_no_file': 'Veuillez d\'abord ouvrir un fichier XDR.',
+        'loading_file': 'Chargement du fichier...',
+        'loading_cancel': 'Annuler',
+        
+        # About dialog
+        'about_title': 'À propos de XBlackBox XDR Viewer',
+        'about_version': 'Édition Moderne v3.0',
+        'about_description': 'Un outil puissant pour visualiser les enregistrements de données de vol X-Plane du plugin XBlackBox.',
+        
+        # Other
+        'restart_required': 'Veuillez redémarrer l\'application pour que les modifications de langue prennent effet.',
+        
+        # Plot labels
+        'plot_time': 'Temps (secondes)',
+        'plot_value': 'Valeur',
+        'plot_rate': 'Taux de changement',
+        'plot_frequency': 'Fréquence (Hz)',
+        'plot_magnitude': 'Magnitude',
+        'plot_longitude': 'Longitude',
+        'plot_latitude': 'Latitude',
+        'plot_altitude': 'Altitude (pieds)',
     }
 }
 
@@ -475,6 +949,12 @@ class Translator:
             if sys_locale:
                 if sys_locale.startswith('zh'):
                     self.current_language = 'zh_CN'
+                elif sys_locale.startswith('ja'):
+                    self.current_language = 'ja_JP'
+                elif sys_locale.startswith('es'):
+                    self.current_language = 'es_ES'
+                elif sys_locale.startswith('fr'):
+                    self.current_language = 'fr_FR'
                 else:
                     self.current_language = DEFAULT_FALLBACK_LANGUAGE
         except (locale.Error, TypeError, ValueError):

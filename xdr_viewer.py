@@ -1843,11 +1843,29 @@ class MainWindow(QMainWindow):
         lang_chinese_action.triggered.connect(partial(self.change_language, 'zh_CN'))
         language_menu.addAction(lang_chinese_action)
         
+        lang_japanese_action = QAction(tr('lang_japanese'), self)
+        lang_japanese_action.setCheckable(True)
+        lang_japanese_action.triggered.connect(partial(self.change_language, 'ja_JP'))
+        language_menu.addAction(lang_japanese_action)
+        
+        lang_spanish_action = QAction(tr('lang_spanish'), self)
+        lang_spanish_action.setCheckable(True)
+        lang_spanish_action.triggered.connect(partial(self.change_language, 'es_ES'))
+        language_menu.addAction(lang_spanish_action)
+        
+        lang_french_action = QAction(tr('lang_french'), self)
+        lang_french_action.setCheckable(True)
+        lang_french_action.triggered.connect(partial(self.change_language, 'fr_FR'))
+        language_menu.addAction(lang_french_action)
+        
         # Store language actions for later
         self.lang_actions = {
             'system': lang_system_action,
             'en_US': lang_english_action,
             'zh_CN': lang_chinese_action,
+            'ja_JP': lang_japanese_action,
+            'es_ES': lang_spanish_action,
+            'fr_FR': lang_french_action,
         }
         
         # Set currently saved language as checked
