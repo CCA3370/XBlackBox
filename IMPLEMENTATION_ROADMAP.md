@@ -18,7 +18,6 @@
 
 ### 3. 3D Earth Rendering with Flight Trajectory (较大功能)
 
-这是一个独立的功能模块，建议在新的PR中实现。
 
 #### 技术方案 / Technical Approach
 
@@ -51,7 +50,6 @@
 ```
 
 #### 预计工作量
-- 2-3天开发时间
 - 需要测试不同地图源
 - 需要优化离线存储大小
 
@@ -59,7 +57,7 @@
 
 ### 4. X-Plane Plugin: Airport Detection (需要C++插件修改)
 
-这需要修改X-Plane插件的C++代码，也建议在新的PR中实现。
+这需要修改X-Plane插件的C++代码
 
 #### 技术方案
 
@@ -175,18 +173,20 @@ bool Recorder::Stop() {
 1. **当前PR**: 
    - ✅ 已完成专业分析功能
    - ✅ 已完成性能优化
-   
-2. **下一个PR (3D Earth Rendering)**:
+
+2. **X-Plane Plugin**:
+   - 修改C++插件代码
+   - 机场检测功能
+   - XDR格式更新
+   - 测试和文档
+
+3. **3D Earth Rendering**:
    - 集成Cesium.js
    - 实现离线地图
    - 3D轨迹渲染
    - 机场标注
 
-3. **第三个PR (X-Plane Plugin)**:
-   - 修改C++插件代码
-   - 机场检测功能
-   - XDR格式更新
-   - 测试和文档
+
 
 ## 技术依赖
 
