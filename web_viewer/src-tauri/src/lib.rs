@@ -385,14 +385,23 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
             let touchdown_spd = speeds.last().copied().unwrap_or(0.0);
             
             // Check for stable approach (descent rate between 300-1000 fpm)
-            let stable = vspeeds.iter().filter(|&&v| v < -300.0 && v > -1000.0).count() 
-                         > vspeeds.len() * 7 / 10; // 70% of approach should be stable
+            // Use floating point for accurate percentage calculation
+            let stable_count = vspeeds.iter().filter(|&&v| v < -300.0 && v > -1000.0).count();
+            let stable = stable_count > (vspeeds.len() as f64 * 0.7) as usize; // 70% of approach should be stable
+            
+            // Safely calculate final approach altitude
+            let final_alt_samples = altitudes.len().min(10);
+            let final_approach_altitude = if final_alt_samples > 0 {
+                altitudes.iter().rev().take(final_alt_samples).sum::<f64>() / final_alt_samples as f64
+            } else {
+                0.0
+            };
             
             Some(ApproachAnalysis {
                 stable_approach: stable,
                 average_descent_rate: avg_descent,
                 touchdown_speed: touchdown_spd,
-                final_approach_altitude: altitudes.iter().rev().take(10).sum::<f64>() / 10.0,
+                final_approach_altitude,
             })
         } else {
             None

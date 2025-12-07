@@ -543,6 +543,14 @@ async function loadFlightAnalysis() {
 }
 
 // Plotting Functions (using Plotly)
+// Performance thresholds for rendering optimization
+const PLOT_PERF_THRESHOLDS = {
+    LARGE_DATASET: 10000,    // Switch to WebGL rendering
+    DOWNSAMPLE_MIN: 20000,   // Start downsampling
+    DOWNSAMPLE_MAX: 50000,   // Aggressive downsampling
+    ANIMATION_LIMIT: 20000   // Disable animations
+};
+
 async function updatePlot() {
     const container = document.getElementById('main-plot');
     
@@ -564,9 +572,9 @@ async function updatePlot() {
         let downsample = 1;
         
         // Optimize rendering for large datasets
-        if (frameCount > 50000) {
+        if (frameCount > PLOT_PERF_THRESHOLDS.DOWNSAMPLE_MAX) {
             downsample = Math.ceil(frameCount / 10000); // Keep ~10k points max
-        } else if (frameCount > 20000) {
+        } else if (frameCount > PLOT_PERF_THRESHOLDS.DOWNSAMPLE_MIN) {
             downsample = Math.ceil(frameCount / 15000); // Keep ~15k points
         }
         
@@ -586,9 +594,12 @@ async function updatePlot() {
                 x: paramData.timestamps,
                 y: paramData.values,
                 name: name,
-                type: frameCount > 10000 ? 'scattergl' : 'scatter', // Use WebGL for large datasets
+                type: frameCount > PLOT_PERF_THRESHOLDS.LARGE_DATASET ? 'scattergl' : 'scatter', // Use WebGL for large datasets
                 mode: 'lines',
-                line: { color: state.colors[colorIdx], width: frameCount > 10000 ? 1 : 1.5 }
+                line: { 
+                    color: state.colors[colorIdx], 
+                    width: frameCount > PLOT_PERF_THRESHOLDS.LARGE_DATASET ? 1 : 1.5 
+                }
             });
         }
 
@@ -814,16 +825,16 @@ async function load3DPath() {
         
         // Optimize for large datasets
         const dataSize = result.latitudes.length;
-        const useGL = dataSize > 5000;
+        const useMarkers = showMarkers && dataSize < PLOT_PERF_THRESHOLDS.LARGE_DATASET;
 
         const trace = {
             x: result.longitudes,
             y: result.latitudes,
             z: result.altitudes,
-            mode: showMarkers && dataSize < 10000 ? 'lines+markers' : 'lines',
-            type: useGL ? 'scatter3d' : 'scatter3d', // Could use scattergl for 2D projection
+            mode: useMarkers ? 'lines+markers' : 'lines',
+            type: useMarkers ? 'scatter3d' : 'scatter3d',
             line: {
-                width: dataSize > 10000 ? 2 : 3,
+                width: dataSize > PLOT_PERF_THRESHOLDS.LARGE_DATASET ? 2 : 3,
                 color: colorByAlt ? result.altitudes : state.colors[0],
                 colorscale: colorByAlt ? 'Viridis' : undefined,
                 showscale: colorByAlt,
@@ -833,7 +844,7 @@ async function load3DPath() {
                     len: 0.5
                 } : undefined
             },
-            marker: showMarkers && dataSize < 10000 ? {
+            marker: useMarkers ? {
                 size: 2,
                 color: colorByAlt ? result.altitudes : state.colors[0],
                 colorscale: 'Viridis'
@@ -893,7 +904,7 @@ async function load3DPath() {
         await Plotly.newPlot(container, [trace], layout, config);
         
         // Animate camera for 3D effect (only for smaller datasets)
-        if (dataSize < 20000) {
+        if (dataSize < PLOT_PERF_THRESHOLDS.ANIMATION_LIMIT) {
             Plotly.animate(container, {
                 layout: {
                     scene: {
