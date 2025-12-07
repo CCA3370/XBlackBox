@@ -16,7 +16,11 @@ Recorder::Recorder()
     , m_lastUpdateTime(0.0f)
     , m_autoStopTimer(0.0f)
     , m_recordCount(0)
-    , m_bytesWritten(0) {
+    , m_bytesWritten(0)
+    , m_averageRecordTime(0.0)
+    , m_maxRecordTime(0.0)
+    , m_totalRecordTime(0.0)
+    , m_perfSampleCount(0) {
     m_writeBuffer.reserve(BUFFER_SIZE);
 }
 
@@ -95,6 +99,12 @@ bool Recorder::Start() {
     m_autoStopTimer = 0.0f;
     m_writeBuffer.clear();
     
+    // Reset performance tracking
+    m_averageRecordTime = 0.0;
+    m_maxRecordTime = 0.0;
+    m_totalRecordTime = 0.0;
+    m_perfSampleCount = 0;
+    
     LogInfo("Recording started: " + filename.str());
     return true;
 }
@@ -133,6 +143,14 @@ bool Recorder::Stop() {
     m_isRecording = false;
     
     int duration = static_cast<int>(std::time(nullptr) - m_recordingStartTime);
+    
+    // Log performance statistics if we recorded anything
+    if (m_perfSampleCount > 0) {
+        LogInfo("Performance stats - Avg record time: " + 
+                std::to_string(m_averageRecordTime * 1000.0) + " ms, Max: " + 
+                std::to_string(m_maxRecordTime * 1000.0) + " ms");
+    }
+    
     LogInfo("Recording stopped - " + std::to_string(m_recordCount) + " records, " +
             std::to_string(m_bytesWritten) + " bytes, " + std::to_string(duration) + " seconds");
     
@@ -300,6 +318,9 @@ void Recorder::WriteFooter() {
 }
 
 void Recorder::RecordFrame() {
+    // Start performance timer
+    auto startTime = std::chrono::high_resolution_clock::now();
+    
     if (!m_currentFile) {
         LogError("RecordFrame called with null file");
         return;
@@ -403,6 +424,29 @@ void Recorder::RecordFrame() {
     if (m_recordCount % FLUSH_INTERVAL == 0) {
         if (m_currentFile->good()) {
             m_currentFile->flush();
+        }
+    }
+    
+    // Track performance metrics
+    auto endTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = endTime - startTime;
+    double recordTime = elapsed.count();
+    
+    m_totalRecordTime += recordTime;
+    m_perfSampleCount++;
+    m_averageRecordTime = m_totalRecordTime / m_perfSampleCount;
+    
+    if (recordTime > m_maxRecordTime) {
+        m_maxRecordTime = recordTime;
+    }
+    
+    // Periodically log performance statistics (only if performance is degrading)
+    if (m_recordCount % PERF_LOG_INTERVAL == 0) {
+        // Log if average time exceeds 1ms or max exceeds 5ms (performance concern)
+        if (m_averageRecordTime > 0.001 || m_maxRecordTime > 0.005) {
+            LogInfo("Performance check at " + std::to_string(m_recordCount) + " records - " +
+                    "Avg: " + std::to_string(m_averageRecordTime * 1000.0) + " ms, " +
+                    "Max: " + std::to_string(m_maxRecordTime * 1000.0) + " ms");
         }
     }
 }
