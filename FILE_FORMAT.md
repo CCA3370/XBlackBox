@@ -34,10 +34,33 @@ The `.xdr` (X-Plane Data Recorder) format is a binary format optimized for:
 
 The file header contains metadata about the recording.
 
+### Version 2 Format (Current)
+
+| Offset | Size | Type   | Description                          |
+|--------|------|--------|--------------------------------------|
+| 0      | 4    | char[] | Magic number "XFDR"                 |
+| 4      | 2    | uint16 | Format version (2 for airport info) |
+| 6      | 1    | uint8  | Recording level (1-3)                |
+| 7      | 4    | float  | Recording interval (seconds)         |
+| 11     | 8    | uint64 | Start timestamp (Unix time)          |
+| 19     | 8    | char[] | Departure airport ICAO code          |
+| 27     | 4    | float  | Departure airport latitude           |
+| 31     | 4    | float  | Departure airport longitude          |
+| 35     | 256  | char[] | Departure airport name               |
+| 291    | 8    | char[] | Arrival airport ICAO code            |
+| 299    | 4    | float  | Arrival airport latitude             |
+| 303    | 4    | float  | Arrival airport longitude            |
+| 307    | 256  | char[] | Arrival airport name                 |
+| 563    | 2    | uint16 | Number of datarefs (N)               |
+
+**Note**: Airport fields are null-padded. If no airport is detected (aircraft not within 5 nm of any airport), the ICAO field will be empty (all zeros).
+
+### Version 1 Format (Legacy)
+
 | Offset | Size | Type   | Description                    |
 |--------|------|--------|--------------------------------|
 | 0      | 4    | char[] | Magic number "XFDR"           |
-| 4      | 2    | uint16 | Format version (currently 1)   |
+| 4      | 2    | uint16 | Format version (1)             |
 | 6      | 1    | uint8  | Recording level (1-3)          |
 | 7      | 4    | float  | Recording interval (seconds)   |
 | 11     | 8    | uint64 | Start timestamp (Unix time)    |
@@ -266,6 +289,27 @@ The C++ implementation includes several optimizations:
 - File extension is `.xdr` (X-Plane Data Recorder)
 - Magic number remains "XFDR" for compatibility with existing readers
 
+## Airport Detection (Version 2+)
+
+Starting with version 2, the file format includes automatic airport detection:
+
+- **Departure Airport**: Automatically detected when recording starts
+- **Arrival Airport**: Automatically detected when recording stops
+- **Detection Range**: Airports within 5 nautical miles of the aircraft
+- **Information Stored**: ICAO code, full name, latitude, and longitude
+
+The airport detection uses X-Plane's navigation database API to find the nearest airport. This feature helps identify:
+- Where the flight originated
+- Where the flight ended
+- Airport information for flight analysis
+
+**Example**: If you start recording at San Francisco International Airport, the departure fields will contain:
+- ICAO: "KSFO"
+- Name: "San Francisco Intl"
+- Coordinates: 37.619, -122.375
+
+If no airport is detected (e.g., recording starts in flight), the ICAO field will be empty.
+
 ## Python Reader Utility
 
 A Python reader utility (`xdr_reader.py`) is included for reading and exporting XDR files:
@@ -289,7 +333,13 @@ python xdr_reader.py recording.xdr --all
 
 ## Version History
 
-**Version 1** (Current)
+**Version 2** (Current)
+- Added automatic airport detection (departure and arrival)
+- Airport information includes ICAO code, name, and coordinates
+- Detection uses X-Plane Navigation API with 5 nm search radius
+- Backward compatible - version 1 files can still be read
+
+**Version 1**
 - Initial format specification
 - Support for float, int, and string datatypes
 - Support for arrays
@@ -307,3 +357,4 @@ Potential enhancements for future versions:
 - Index for fast seeking
 - Delta encoding for better compression
 - Additional dataref types (double, bool)
+- Runway information (departure/arrival runway used)
