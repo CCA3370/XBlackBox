@@ -23,15 +23,20 @@ void DatarefManager::Reload() {
 void DatarefManager::LoadDatarefs() {
     RecordingLevel level = Settings::Instance().GetRecordingLevel();
     
-    // Always load basic
+    // Recording levels are cumulative:
+    // Level 1: Basic only
+    // Level 2: Basic + Normal
+    // Level 3: Basic + Normal + Detailed
+    
+    // Always load basic (Level 1)
     LoadBasicDatarefs();
     
-    // Load normal if level >= 2
+    // Load normal if level >= 2 (Levels 2 and 3)
     if (level >= RecordingLevel::Normal) {
         LoadNormalDatarefs();
     }
     
-    // Load detailed if level >= 3
+    // Load detailed if level >= 3 (Level 3 only)
     if (level >= RecordingLevel::Detailed) {
         LoadDetailedDatarefs();
     }

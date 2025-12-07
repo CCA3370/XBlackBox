@@ -21,10 +21,10 @@ See [VIEWER_GUIDE.md](VIEWER_GUIDE.md) for complete documentation.
 ## Features
 
 - **Real-time Recording**: Continuously records flight data at configurable intervals (20Hz to 0.2Hz)
-- **Three Recording Levels**:
-  - **Simple**: Basic flight data (position, attitude, velocities) - ~25 parameters
-  - **Normal**: + flight controls, engines, systems - ~70 parameters  
-  - **Detailed**: Everything including autopilot, weather, warnings, failures, etc. - ~230+ parameters
+- **Three Recording Levels** (each level includes all data from previous levels):
+  - **Simple (Level 1)**: Basic flight data (position, attitude, velocities) - ~26 parameters
+  - **Normal (Level 2)**: Level 1 + flight controls, engines, systems - ~163 parameters  
+  - **Detailed (Level 3)**: Level 1 + Level 2 + autopilot, weather, warnings, failures, etc. - ~363 parameters
 - **Efficient Binary Format**: Compact .xdr files for minimal disk usage and fast I/O
 - **Optimized Performance**: Buffered binary I/O, efficient dataref caching
 - **Auto Recording Mode**: Automatically starts/stops recording based on:
@@ -156,6 +156,8 @@ X-Plane 12/Output/XBlackBox/config.ini
 
 ## Recorded Parameters
 
+**Note**: Each recording level is cumulative - Level 2 includes all Level 1 parameters plus additional ones, and Level 3 includes all Level 1 and Level 2 parameters plus additional ones.
+
 ### Level 1: Simple (Basic Flight Data)
 
 **Time & Aircraft Info**
@@ -178,7 +180,7 @@ X-Plane 12/Output/XBlackBox/config.ini
 **Forces**
 - G-forces (normal, axial, side)
 
-### Level 2: Normal (+ Controls & Systems)
+### Level 2: Normal (includes all Level 1 data + Controls & Systems)
 
 **Flight Controls**
 - Yoke pitch, roll, rudder pedals
@@ -205,7 +207,7 @@ X-Plane 12/Output/XBlackBox/config.ini
 - Total weight, Fuel weight
 - Fuel quantity
 
-### Level 3: Detailed (Everything)
+### Level 3: Detailed (includes all Level 1 & 2 data + Everything Else)
 
 **Autopilot**
 - State, Mode
