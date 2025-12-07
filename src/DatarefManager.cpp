@@ -29,6 +29,12 @@ void DatarefManager::LoadDatarefs() {
     // Level 2: Basic + Normal
     // Level 3: Basic + Normal + Detailed
     
+    // Reserve space for datarefs to avoid reallocations
+    // Estimated counts: Level 1 ~26, Level 2 ~163, Level 3 ~363
+    size_t estimatedCount = (level == RecordingLevel::Simple) ? 30 : 
+                           (level == RecordingLevel::Normal) ? 170 : 370;
+    m_datarefs.reserve(estimatedCount);
+    
     // Always load basic (Level 1)
     LoadBasicDatarefs();
     
@@ -42,16 +48,31 @@ void DatarefManager::LoadDatarefs() {
         LoadDetailedDatarefs();
     }
     
-    // Pre-allocate storage for values
-    size_t totalSize = 0;
+    // Pre-allocate storage for values to avoid reallocations during runtime
+    size_t floatCount = 0;
+    size_t intCount = 0;
+    size_t stringCount = 0;
+    
     for (const auto& dr : m_datarefs) {
-        totalSize += (dr.arraySize > 0) ? dr.arraySize : 1;
+        size_t count = (dr.arraySize > 0) ? dr.arraySize : 1;
+        if (dr.type == DatarefType::Float) {
+            floatCount += count;
+        } else if (dr.type == DatarefType::Int) {
+            intCount += count;
+        } else if (dr.type == DatarefType::String) {
+            stringCount += count;
+        }
     }
-    m_floatValues.reserve(totalSize);
-    m_intValues.reserve(totalSize);
+    
+    m_floatValues.reserve(floatCount);
+    m_intValues.reserve(intCount);
+    m_stringValues.reserve(stringCount);
     
     LogInfo("Loaded " + std::to_string(m_datarefs.size()) + " datarefs for level " + 
-            Settings::Instance().GetRecordingLevelName());
+            Settings::Instance().GetRecordingLevelName() + 
+            " (" + std::to_string(floatCount) + " floats, " + 
+            std::to_string(intCount) + " ints, " + 
+            std::to_string(stringCount) + " strings)");
 }
 
 void DatarefManager::AddDataref(const std::string& name, const std::string& desc, 

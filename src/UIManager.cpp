@@ -105,11 +105,22 @@ void UIManager::Cleanup() {
 }
 
 void UIManager::Update() {
-    // Update notification timer
+    // Update notification timer with error checking
     if (m_notificationTime > 0.0f) {
-        XPLMDataRef timeRef = XPLMFindDataRef("sim/time/framerate_period");
-        float framePeriod = XPLMGetDataf(timeRef);
-        m_notificationTime -= framePeriod;
+        static XPLMDataRef timeRef = XPLMFindDataRef("sim/time/framerate_period");
+        if (timeRef) {
+            float framePeriod = XPLMGetDataf(timeRef);
+            // Sanity check the frame period (should be between 0.001 and 1.0 seconds)
+            if (framePeriod > 0.001f && framePeriod < 1.0f) {
+                m_notificationTime -= framePeriod;
+            } else {
+                // Fallback: assume 60 FPS
+                m_notificationTime -= 0.0166f;
+            }
+        } else {
+            // Fallback: assume 60 FPS
+            m_notificationTime -= 0.0166f;
+        }
     }
 }
 

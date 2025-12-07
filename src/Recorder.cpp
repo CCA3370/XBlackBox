@@ -140,6 +140,11 @@ bool Recorder::Stop() {
 }
 
 void Recorder::Update(float deltaTime) {
+    // Early exit if not recording and auto mode is off - saves CPU cycles
+    if (!m_isRecording && !Settings::Instance().GetAutoMode()) {
+        return;
+    }
+    
     // Cache time dataref for efficiency (avoid repeated lookups)
     static XPLMDataRef timeRef = XPLMFindDataRef("sim/time/total_running_time_sec");
     if (!timeRef) {
@@ -158,6 +163,10 @@ void Recorder::Update(float deltaTime) {
         if (CheckAutoStartCondition()) {
             Start();
         }
+        // Exit early if we started recording to avoid double processing
+        if (!m_isRecording) {
+            return;
+        }
     }
     
     // Check auto stop
@@ -166,6 +175,7 @@ void Recorder::Update(float deltaTime) {
             m_autoStopTimer += deltaTime;
             if (m_autoStopTimer >= Settings::Instance().GetAutoStopDelay()) {
                 Stop();
+                return;  // Exit after stopping
             }
         } else {
             m_autoStopTimer = 0.0f;
@@ -302,7 +312,8 @@ void Recorder::RecordFrame() {
         return;
     }
     
-    // Read current dataref values
+    // Read current dataref values from X-Plane
+    // This bulk reads all configured datarefs for the current recording level
     try {
         DatarefManager::Instance().ReadCurrentValues();
     } catch (const std::exception& e) {
@@ -310,11 +321,12 @@ void Recorder::RecordFrame() {
         // Continue with partial data rather than crashing
     }
     
-    // Frame marker "DATA"
+    // Write frame marker to identify this as a data frame in the file
     m_currentFile->write("DATA", 4);
     m_bytesWritten += 4;
     
-    // Timestamp (4 bytes float - relative to start)
+    // Timestamp (4 bytes float - relative to recording start)
+    // Using cached dataref reference for performance
     static XPLMDataRef timeRef = XPLMFindDataRef("sim/time/total_running_time_sec");
     if (timeRef) {
         float relativeTime = XPLMGetDataf(timeRef);
@@ -326,6 +338,7 @@ void Recorder::RecordFrame() {
     }
     
     // Write all dataref values with bounds checking
+    // Values are written in the same order as defined in the header
     const auto& datarefs = DatarefManager::Instance().GetDatarefs();
     const auto& floatVals = DatarefManager::Instance().GetFloatValues();
     const auto& intVals = DatarefManager::Instance().GetIntValues();
@@ -335,6 +348,7 @@ void Recorder::RecordFrame() {
     size_t intIdx = 0;
     size_t stringIdx = 0;
     
+    // Iterate through each dataref definition and write its value(s)
     for (const auto& dr : datarefs) {
         if (dr.arraySize > 0) {
             // Write array values with bounds checking
@@ -384,7 +398,8 @@ void Recorder::RecordFrame() {
     
     m_recordCount++;
     
-    // Flush periodically
+    // Periodically flush buffer to disk for data safety
+    // Balances between performance and data loss risk
     if (m_recordCount % FLUSH_INTERVAL == 0) {
         if (m_currentFile->good()) {
             m_currentFile->flush();
