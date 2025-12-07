@@ -576,20 +576,43 @@ class ParameterSelector(QWidget):
             
     def select_all(self):
         """Select all visible parameters"""
-        for cb in self.checkboxes:
+        # Block signals to prevent multiple plot updates
+        for i, cb in enumerate(self.checkboxes):
             if cb.isVisible():
+                cb.blockSignals(True)
                 cb.setChecked(True)
+                
+                # Manually assign color since signal is blocked
+                param_name = self.parameters[i]['name']
+                if param_name not in self.assigned_colors:
+                    color = PARAMETER_COLORS[self.next_color_index % len(PARAMETER_COLORS)]
+                    self.assigned_colors[param_name] = color
+                    self.next_color_index += 1
+                
+                # Set text color
+                color = self.assigned_colors[param_name]
+                cb.setStyleSheet(f"color: {color};")
+                
+                cb.blockSignals(False)
+        
+        # Emit a single selection changed signal after all are selected
+        self.selectionChanged.emit()
                 
     def select_none(self):
         """Deselect all parameters"""
+        # Block signals to prevent multiple plot updates
         for cb in self.checkboxes:
+            cb.blockSignals(True)
             cb.setChecked(False)
+            cb.setStyleSheet("")
+            cb.blockSignals(False)
+        
         # Clear color assignments when all deselected
         self.assigned_colors = {}
         self.next_color_index = 0
-        # Reset styles
-        for cb in self.checkboxes:
-            cb.setStyleSheet("")
+        
+        # Emit a single selection changed signal after all are deselected
+        self.selectionChanged.emit()
             
     def on_checkbox_changed(self, index: int, state: int):
         """Handle checkbox state change - assign color when checked"""
