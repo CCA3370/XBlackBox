@@ -4,8 +4,11 @@ XBlackBox XDR Viewer - PySide6 GUI Application
 Visualize and analyze X-Plane flight data recordings
 
 Enhanced with:
+- Modern UI design with vibrant colors
 - Performance optimization with data downsampling
 - Advanced statistics and analysis
+- FFT (Frequency Analysis) for oscillation detection
+- 3D flight path visualization
 - Recent files menu
 - Drag and drop support
 - Time range selection
@@ -40,6 +43,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 
 class XDRData:
@@ -1330,6 +1334,185 @@ class FFTWidget(QWidget):
         return name
 
 
+class FlightPath3DWidget(QWidget):
+    """Widget for 3D flight path visualization"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.data = None
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Title
+        title = QLabel("<b>✈️ 3D Flight Path</b>")
+        title.setStyleSheet("font-size: 13pt; color: #0d7377; padding: 8px;")
+        layout.addWidget(title)
+        
+        info = QLabel("Interactive 3D visualization of aircraft trajectory using latitude, longitude, and altitude")
+        info.setWordWrap(True)
+        info.setStyleSheet("color: #b0b0b0; font-size: 9pt; padding: 4px 8px; background-color: #2d2d2d; border-radius: 6px;")
+        layout.addWidget(info)
+        
+        # Controls
+        controls_layout = QHBoxLayout()
+        
+        self.cb_show_markers = QCheckBox("Show Markers")
+        self.cb_show_markers.setChecked(False)
+        self.cb_show_markers.setToolTip("Show points along the flight path")
+        self.cb_show_markers.stateChanged.connect(self.update_plot)
+        controls_layout.addWidget(self.cb_show_markers)
+        
+        self.cb_color_by_altitude = QCheckBox("Color by Altitude")
+        self.cb_color_by_altitude.setChecked(True)
+        self.cb_color_by_altitude.setToolTip("Color the path by altitude (blue=low, red=high)")
+        self.cb_color_by_altitude.stateChanged.connect(self.update_plot)
+        controls_layout.addWidget(self.cb_color_by_altitude)
+        
+        controls_layout.addStretch()
+        
+        self.btn_refresh = QPushButton("🔄 Update")
+        self.btn_refresh.setToolTip("Refresh 3D flight path")
+        self.btn_refresh.clicked.connect(self.update_plot)
+        controls_layout.addWidget(self.btn_refresh)
+        
+        layout.addLayout(controls_layout)
+        
+        # 3D plot
+        self.fig = Figure(figsize=(10, 8), dpi=100)
+        self.fig.set_facecolor('#1e1e1e')
+        self.canvas = FigureCanvas(self.fig)
+        self.canvas.setParent(self)
+        
+        self.toolbar = NavigationToolbar(self.canvas, self)
+        layout.addWidget(self.toolbar)
+        layout.addWidget(self.canvas, 1)
+        
+        # Stats label
+        self.stats_label = QLabel("")
+        self.stats_label.setWordWrap(True)
+        self.stats_label.setStyleSheet("padding: 8px; background-color: #2d2d2d; border-radius: 6px; color: #e0e0e0;")
+        layout.addWidget(self.stats_label)
+        
+    def set_data(self, data: XDRData):
+        """Set data and update plot"""
+        self.data = data
+        self.update_plot()
+        
+    def update_plot(self):
+        """Update 3D flight path plot"""
+        if not self.data or not self.data.frames:
+            self.fig.clear()
+            self.canvas.draw()
+            self.stats_label.setText("⚠️ No data available")
+            return
+        
+        # Find latitude, longitude, and altitude datarefs
+        lat_idx = lon_idx = alt_idx = None
+        for i, dr in enumerate(self.data.datarefs):
+            name = dr['name'].lower()
+            if 'latitude' in name:
+                lat_idx = i
+            elif 'longitude' in name:
+                lon_idx = i
+            elif ('elevation' in name or 'altitude' in name) and 'agl' not in name:
+                alt_idx = i
+        
+        if lat_idx is None or lon_idx is None or alt_idx is None:
+            self.stats_label.setText("⚠️ Required parameters not found (latitude, longitude, elevation)")
+            return
+        
+        # Extract data
+        lats = []
+        lons = []
+        alts = []
+        
+        for frame in self.data.frames:
+            lats.append(frame['values'][lat_idx])
+            lons.append(frame['values'][lon_idx])
+            alts.append(frame['values'][alt_idx])
+        
+        if not lats:
+            self.stats_label.setText("⚠️ No position data available")
+            return
+        
+        # Calculate stats
+        min_alt = min(alts)
+        max_alt = max(alts)
+        alt_range = max_alt - min_alt
+        
+        # Calculate approximate distance (simple great circle approximation)
+        import math
+        total_distance = 0
+        for i in range(1, len(lats)):
+            dlat = math.radians(lats[i] - lats[i-1])
+            dlon = math.radians(lons[i] - lons[i-1])
+            a = math.sin(dlat/2)**2 + math.cos(math.radians(lats[i-1])) * math.cos(math.radians(lats[i])) * math.sin(dlon/2)**2
+            c = 2 * math.asin(math.sqrt(a))
+            total_distance += 6371 * c  # Earth radius in km
+        
+        self.stats_label.setText(
+            f"<b>Flight Path Summary:</b> "
+            f"Min Alt: {min_alt:.0f} ft | "
+            f"Max Alt: {max_alt:.0f} ft | "
+            f"Range: {alt_range:.0f} ft | "
+            f"Distance: ~{total_distance:.1f} km"
+        )
+        
+        # Create 3D plot
+        self.fig.clear()
+        ax = self.fig.add_subplot(111, projection='3d')
+        ax.set_facecolor('#252525')
+        self.fig.patch.set_facecolor('#1e1e1e')
+        
+        # Plot path
+        if self.cb_color_by_altitude.isChecked():
+            # Color by altitude
+            import matplotlib.cm as cm
+            norm = plt.Normalize(min_alt, max_alt)
+            colors = cm.viridis(norm(alts))
+            
+            for i in range(len(lats) - 1):
+                ax.plot([lons[i], lons[i+1]], [lats[i], lats[i+1]], [alts[i], alts[i+1]],
+                       color=colors[i], linewidth=2, alpha=0.8)
+        else:
+            ax.plot(lons, lats, alts, color='#0d7377', linewidth=2, alpha=0.8)
+        
+        # Add markers if requested
+        if self.cb_show_markers.isChecked():
+            # Downsample markers for performance
+            step = max(1, len(lats) // 100)
+            ax.scatter(lons[::step], lats[::step], alts[::step], 
+                      c='#ff6b6b', s=20, alpha=0.6, edgecolors='none')
+            
+            # Mark start and end
+            ax.scatter([lons[0]], [lats[0]], [alts[0]], 
+                      c='#4ecdc4', s=100, marker='o', label='Start', edgecolors='white', linewidths=2)
+            ax.scatter([lons[-1]], [lats[-1]], [alts[-1]], 
+                      c='#ff6b6b', s=100, marker='s', label='End', edgecolors='white', linewidths=2)
+            ax.legend(facecolor='#2d2d2d', edgecolor='#0d7377', labelcolor='#e0e0e0')
+        
+        # Labels and styling
+        ax.set_xlabel('Longitude', color='#e0e0e0', fontsize=9, fontweight='500')
+        ax.set_ylabel('Latitude', color='#e0e0e0', fontsize=9, fontweight='500')
+        ax.set_zlabel('Altitude (ft)', color='#e0e0e0', fontsize=9, fontweight='500')
+        ax.tick_params(colors='#b0b0b0', labelsize=8)
+        
+        # Set background colors
+        ax.xaxis.pane.fill = False
+        ax.yaxis.pane.fill = False
+        ax.zaxis.pane.fill = False
+        ax.xaxis.pane.set_edgecolor('#3d3d3d')
+        ax.yaxis.pane.set_edgecolor('#3d3d3d')
+        ax.zaxis.pane.set_edgecolor('#3d3d3d')
+        ax.grid(True, alpha=0.2, linestyle='--', linewidth=0.5, color='#4d4d4d')
+        
+        self.fig.tight_layout()
+        self.canvas.draw()
+
+
 class MainWindow(QMainWindow):
     """Main application window"""
     
@@ -1526,6 +1709,10 @@ class MainWindow(QMainWindow):
         self.fft_widget = FFTWidget()
         self.tabs.addTab(self.fft_widget, "Frequency Analysis")
         
+        # 3D Flight Path tab
+        self.flight_path_widget = FlightPath3DWidget()
+        self.tabs.addTab(self.flight_path_widget, "3D Flight Path")
+        
         right_layout.addWidget(self.tabs, 1)
         
         splitter.addWidget(right_panel)
@@ -1611,6 +1798,14 @@ class MainWindow(QMainWindow):
         fft_action.triggered.connect(self.show_fft_tab)
         analysis_menu.addAction(fft_action)
         
+        analysis_menu.addSeparator()
+        
+        flight_path_action = QAction("Show &3D Flight Path", self)
+        flight_path_action.setShortcut("Ctrl+3")
+        flight_path_action.setToolTip("View 3D visualization of flight trajectory")
+        flight_path_action.triggered.connect(self.show_flight_path_tab)
+        analysis_menu.addAction(flight_path_action)
+        
         # Help menu
         help_menu = menubar.addMenu("&Help")
         
@@ -1674,6 +1869,7 @@ class MainWindow(QMainWindow):
             self.file_info.update_info(self.data)
             self.param_selector.set_parameters(self.data.get_all_plottable_parameters())
             self.data_table.set_data(self.data)
+            self.flight_path_widget.set_data(self.data)
             self.canvas.clear_plots()
             self.time_range = None
             
@@ -1790,6 +1986,12 @@ class MainWindow(QMainWindow):
         selected = self.param_selector.get_selected_parameters()
         if selected:
             self.fft_widget.set_data(self.data, selected)
+    
+    def show_flight_path_tab(self):
+        """Show 3D flight path tab"""
+        self.tabs.setCurrentIndex(5)  # 3D Flight Path tab
+        if self.data:
+            self.flight_path_widget.set_data(self.data)
             
     def update_plot(self):
         """Update the plot with selected parameters"""
@@ -1843,6 +2045,7 @@ class MainWindow(QMainWindow):
         <tr style="background-color: #2d2d2d;"><th colspan="2" style="text-align: left; color: #0d7377; padding-top: 12px;">Analysis</th></tr>
         <tr><td><b>Ctrl+T</b></td><td>Show Statistics</td></tr>
         <tr><td><b>Ctrl+F</b></td><td>Show Frequency Analysis</td></tr>
+        <tr><td><b>Ctrl+3</b></td><td>Show 3D Flight Path</td></tr>
         
         <tr style="background-color: #2d2d2d;"><th colspan="2" style="text-align: left; color: #0d7377; padding-top: 12px;">Help</th></tr>
         <tr><td><b>F1</b></td><td>Show This Help</td></tr>
