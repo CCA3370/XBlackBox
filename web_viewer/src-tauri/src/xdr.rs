@@ -6,6 +6,15 @@ use std::io::{self, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AirportInfo {
+    pub icao: String,
+    pub name: String,
+    pub lat: f32,
+    pub lon: f32,
+    pub valid: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct XDRHeader {
     pub magic: String,
     pub version: u16,
@@ -15,6 +24,10 @@ pub struct XDRHeader {
     pub start_timestamp: u64,
     pub start_datetime: String,
     pub dataref_count: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub departure_airport: Option<AirportInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arrival_airport: Option<AirportInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_records: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -91,6 +104,8 @@ impl XDRData {
                 start_timestamp: 0,
                 start_datetime: String::new(),
                 dataref_count: 0,
+                departure_airport: None,
+                arrival_airport: None,
                 total_records: None,
                 end_timestamp: None,
                 end_datetime: None,
@@ -132,7 +147,71 @@ impl XDRData {
         let level = reader.read_u8()?;
         let interval = reader.read_f32::<LittleEndian>()?;
         let start_timestamp = reader.read_u64::<LittleEndian>()?;
-        let dataref_count = reader.read_u16::<LittleEndian>()?;
+        
+        // Version 2+ includes airport information
+        let (departure_airport, arrival_airport, dataref_count) = if version >= 2 {
+            // Read departure airport
+            let mut dep_icao = [0u8; 8];
+            reader.read_exact(&mut dep_icao)?;
+            let dep_lat = reader.read_f32::<LittleEndian>()?;
+            let dep_lon = reader.read_f32::<LittleEndian>()?;
+            let mut dep_name = [0u8; 256];
+            reader.read_exact(&mut dep_name)?;
+            
+            // Read arrival airport
+            let mut arr_icao = [0u8; 8];
+            reader.read_exact(&mut arr_icao)?;
+            let arr_lat = reader.read_f32::<LittleEndian>()?;
+            let arr_lon = reader.read_f32::<LittleEndian>()?;
+            let mut arr_name = [0u8; 256];
+            reader.read_exact(&mut arr_name)?;
+            
+            let dataref_count = reader.read_u16::<LittleEndian>()?;
+            
+            // Parse departure airport
+            let dep_icao_str = String::from_utf8_lossy(&dep_icao)
+                .trim_end_matches('\0')
+                .to_string();
+            let dep_name_str = String::from_utf8_lossy(&dep_name)
+                .trim_end_matches('\0')
+                .to_string();
+            let departure = if !dep_icao_str.is_empty() {
+                Some(AirportInfo {
+                    icao: dep_icao_str,
+                    name: dep_name_str,
+                    lat: dep_lat,
+                    lon: dep_lon,
+                    valid: true,
+                })
+            } else {
+                None
+            };
+            
+            // Parse arrival airport
+            let arr_icao_str = String::from_utf8_lossy(&arr_icao)
+                .trim_end_matches('\0')
+                .to_string();
+            let arr_name_str = String::from_utf8_lossy(&arr_name)
+                .trim_end_matches('\0')
+                .to_string();
+            let arrival = if !arr_icao_str.is_empty() {
+                Some(AirportInfo {
+                    icao: arr_icao_str,
+                    name: arr_name_str,
+                    lat: arr_lat,
+                    lon: arr_lon,
+                    valid: true,
+                })
+            } else {
+                None
+            };
+            
+            (departure, arrival, dataref_count)
+        } else {
+            // Version 1 - read dataref count directly
+            let dataref_count = reader.read_u16::<LittleEndian>()?;
+            (None, None, dataref_count)
+        };
 
         let level_name = match level {
             1 => "Simple",
@@ -155,6 +234,8 @@ impl XDRData {
             start_timestamp,
             start_datetime,
             dataref_count,
+            departure_airport,
+            arrival_airport,
             total_records: None,
             end_timestamp: None,
             end_datetime: None,
