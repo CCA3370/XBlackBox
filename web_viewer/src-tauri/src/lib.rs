@@ -1,13 +1,18 @@
 mod xdr;
+mod logger;
+mod security;
 
+use logger::AppLogger;
+use security::{validate_file_path, sanitize_error_message};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::State;
 
-// Global state for XDR data
+// Global state for XDR data and logger
 struct AppState {
     xdr_data: Mutex<Option<xdr::XDRData>>,
+    logger: AppLogger,
 }
 
 // Request/Response types
@@ -97,11 +102,40 @@ struct TableDataResponse {
 // Tauri Commands
 #[tauri::command]
 async fn load_file(filepath: String, state: State<'_, AppState>) -> Result<LoadFileResponse, String> {
-    match xdr::XDRData::read(&filepath) {
+    // Log the file load attempt
+    state.logger.log_info(&format!("Attempting to load file: {}", sanitize_error_message(&filepath)));
+    
+    // Validate and sanitize the file path
+    let validated_path = match validate_file_path(&filepath) {
+        Ok(path) => path,
+        Err(e) => {
+            let error_msg = format!("File validation failed: {}", e);
+            state.logger.log_error(&error_msg);
+            return Ok(LoadFileResponse {
+                success: false,
+                error: Some(sanitize_error_message(&error_msg)),
+                header: None,
+                parameters: None,
+                frame_count: None,
+            });
+        }
+    };
+    
+    // Log validated path
+    state.logger.log_debug(&format!("Validated path: {}", validated_path.display()));
+    
+    // Attempt to read the XDR file
+    match xdr::XDRData::read(&validated_path) {
         Ok(data) => {
             let header = data.header.clone();
             let parameters = data.get_all_plottable_parameters();
             let frame_count = data.frames.len();
+
+            state.logger.log_info(&format!(
+                "Successfully loaded file: {} frames, {} parameters",
+                frame_count,
+                parameters.len()
+            ));
 
             *state.xdr_data.lock().unwrap() = Some(data);
 
@@ -113,13 +147,18 @@ async fn load_file(filepath: String, state: State<'_, AppState>) -> Result<LoadF
                 frame_count: Some(frame_count),
             })
         }
-        Err(e) => Ok(LoadFileResponse {
-            success: false,
-            error: Some(e.to_string()),
-            header: None,
-            parameters: None,
-            frame_count: None,
-        }),
+        Err(e) => {
+            let error_msg = format!("Failed to read XDR file: {}", e);
+            state.logger.log_error(&error_msg);
+            
+            Ok(LoadFileResponse {
+                success: false,
+                error: Some(sanitize_error_message(&e.to_string())),
+                header: None,
+                parameters: None,
+                frame_count: None,
+            })
+        }
     }
 }
 
@@ -128,10 +167,15 @@ async fn get_data(
     request: GetDataRequest,
     state: State<'_, AppState>,
 ) -> Result<HashMap<String, ParameterData>, String> {
+    state.logger.log_debug(&format!("get_data called with {} parameters", request.parameters.len()));
+    
     let data_guard = state.xdr_data.lock().unwrap();
     let data = data_guard
         .as_ref()
-        .ok_or_else(|| "No file loaded".to_string())?;
+        .ok_or_else(|| {
+            state.logger.log_warning("get_data called but no file loaded");
+            "No file loaded".to_string()
+        })?;
 
     let time_range = request.time_range.as_ref().and_then(|tr| {
         if tr.len() >= 2 {
@@ -157,6 +201,7 @@ async fn get_data(
         );
     }
 
+    state.logger.log_debug(&format!("get_data returning {} parameter datasets", result.len()));
     Ok(result)
 }
 
@@ -232,12 +277,18 @@ const ALTITUDE_THRESHOLD_AGL: f64 = 10.0; // feet AGL threshold for takeoff/land
 
 #[tauri::command]
 async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, String> {
+    state.logger.log_info("Starting flight analysis");
+    
     let data_guard = state.xdr_data.lock().unwrap();
     let data = data_guard
         .as_ref()
-        .ok_or_else(|| "No file loaded".to_string())?;
+        .ok_or_else(|| {
+            state.logger.log_warning("analyze_flight called but no file loaded");
+            "No file loaded".to_string()
+        })?;
 
     if data.frames.is_empty() {
+        state.logger.log_warning("Flight analysis attempted on empty data");
         return Err("No flight data available".to_string());
     }
 
@@ -470,6 +521,12 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
         0.0
     };
 
+    state.logger.log_info(&format!(
+        "Flight analysis completed: {} phases, {} anomalies detected",
+        phases.len(),
+        anomalies.len()
+    ));
+
     Ok(FlightAnalysis {
         phases,
         total_flight_time: total_time,
@@ -596,13 +653,33 @@ async fn get_table_data(
     })
 }
 
+#[tauri::command]
+async fn get_log_path(state: State<'_, AppState>) -> Result<String, String> {
+    Ok(state.logger.get_log_path())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize logger - this is critical for debugging and security auditing
+    // We panic on logger initialization failure because:
+    // 1. Logging is essential for tracking security events and debugging issues
+    // 2. Without logging, we cannot audit file access or track potential security breaches
+    // 3. The application should not run in a degraded state without logging
+    let logger = AppLogger::new().unwrap_or_else(|e| {
+        eprintln!("FATAL: Failed to initialize logger: {}", e);
+        eprintln!("The application requires write access to the home directory for logging.");
+        eprintln!("Please ensure you have write permissions to: ~/.xblackbox/logs/");
+        panic!("Cannot initialize logging system: {}", e);
+    });
+    
+    logger.log_info("Initializing XBlackBox Tauri application");
+    
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(AppState {
             xdr_data: Mutex::new(None),
+            logger,
         })
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -622,6 +699,7 @@ pub fn run() {
             get_correlation,
             get_flight_path,
             get_table_data,
+            get_log_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

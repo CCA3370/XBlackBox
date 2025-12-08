@@ -1570,6 +1570,55 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Log button handler (Tauri only)
+    if (window.isTauri) {
+        const logBtn = document.getElementById('btn-logs');
+        if (logBtn) {
+            logBtn.style.display = 'inline-flex';
+            logBtn.addEventListener('click', async () => {
+                try {
+                    const logPath = await api.getLogPath();
+                    if (logPath) {
+                        const message = `Logs are stored at:\n${logPath}\n\nWould you like to copy this path?`;
+                        if (confirm(message)) {
+                            // Try to copy to clipboard with error handling
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                                try {
+                                    await navigator.clipboard.writeText(logPath);
+                                    ui.showToast('Log path copied to clipboard!', 'success');
+                                } catch (clipboardError) {
+                                    console.warn('Clipboard access denied:', clipboardError);
+                                    // Fallback: show path in long-duration toast
+                                    ui.showToast('Log path: ' + logPath, 'info', 10000);
+                                }
+                            } else {
+                                // Fallback for browsers without clipboard API
+                                ui.showToast('Log path: ' + logPath, 'info', 10000);
+                            }
+                        }
+                    } else {
+                        ui.showToast('Log path not available', 'warning');
+                    }
+                } catch (error) {
+                    console.error('Error getting log path:', error);
+                    ui.showToast('Failed to get log path', 'error');
+                }
+            });
+        }
+        
+        // Get log path on startup and show in console
+        (async () => {
+            try {
+                const logPath = await api.getLogPath();
+                if (logPath) {
+                    console.log('📝 XBlackBox logs are stored at:', logPath);
+                }
+            } catch (error) {
+                console.error('Failed to get log path:', error);
+            }
+        })();
+    }
+
     // Initial UI state
     ui.updateStatus('Ready');
 });

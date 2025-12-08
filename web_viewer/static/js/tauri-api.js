@@ -6,10 +6,30 @@
 // Check if we're running in Tauri
 const isTauri = window.__TAURI__ !== undefined;
 
+// Helper function to validate JSON content-type
+// Accepts 'application/json' with or without charset (e.g., 'application/json; charset=utf-8')
+function validateJsonResponse(response) {
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.toLowerCase().includes('application/json')) {
+        throw new Error('Server returned an invalid response format');
+    }
+}
+
 // Tauri API wrapper
 const tauriApi = isTauri ? {
     async invoke(cmd, args = {}) {
-        return window.__TAURI__.core.invoke(cmd, args);
+        try {
+            return await window.__TAURI__.core.invoke(cmd, args);
+        } catch (error) {
+            // Handle Tauri invoke errors properly
+            console.error(`Tauri invoke error for ${cmd}:`, error);
+            
+            // Check if error is an object with a message
+            if (typeof error === 'object' && error !== null) {
+                throw new Error(error.message || JSON.stringify(error));
+            }
+            throw error;
+        }
     },
     
     async openDialog() {
@@ -21,6 +41,15 @@ const tauriApi = isTauri ? {
                 extensions: ['xdr']
             }]
         });
+    },
+    
+    async getLogPath() {
+        try {
+            return await window.__TAURI__.core.invoke('get_log_path');
+        } catch (error) {
+            console.error('Failed to get log path:', error);
+            return null;
+        }
     }
 } : null;
 
@@ -39,27 +68,61 @@ const api = {
 
     async loadFile(path) {
         if (isTauri) {
-            const result = await tauriApi.invoke('load_file', { filepath: path });
-            return result;
+            try {
+                const result = await tauriApi.invoke('load_file', { filepath: path });
+                
+                // Validate response structure
+                if (typeof result !== 'object' || result === null) {
+                    throw new Error('Invalid response from server: expected object, got ' + typeof result);
+                }
+                
+                // Check if result has expected properties
+                if (result.success === undefined) {
+                    throw new Error('Invalid response structure: missing success property');
+                }
+                
+                return result;
+            } catch (error) {
+                console.error('Load file error:', error);
+                
+                // Return error in expected format
+                return {
+                    success: false,
+                    error: error.message || 'Unknown error occurred while loading file'
+                };
+            }
         } else {
             const response = await fetch('/api/load', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ filepath: path })
             });
+            
+            validateJsonResponse(response);
             return response.json();
         }
     },
 
     async getData(params, downsample = 1, timeRange = null) {
         if (isTauri) {
-            return await tauriApi.invoke('get_data', {
-                request: {
-                    parameters: params,
-                    downsample,
-                    time_range: timeRange
+            try {
+                const result = await tauriApi.invoke('get_data', {
+                    request: {
+                        parameters: params,
+                        downsample,
+                        time_range: timeRange
+                    }
+                });
+                
+                if (typeof result !== 'object' || result === null) {
+                    throw new Error('Invalid response from server');
                 }
-            });
+                
+                return result;
+            } catch (error) {
+                console.error('Get data error:', error);
+                return { error: error.message || 'Failed to retrieve data' };
+            }
         } else {
             const response = await fetch('/api/data', {
                 method: 'POST',
@@ -70,6 +133,8 @@ const api = {
                     time_range: timeRange 
                 })
             });
+            
+            validateJsonResponse(response);
             return response.json();
         }
     },
@@ -149,6 +214,14 @@ const api = {
             return await tauriApi.openDialog();
         } else {
             // In web mode, use the file input
+            return null;
+        }
+    },
+    
+    async getLogPath() {
+        if (isTauri) {
+            return await tauriApi.getLogPath();
+        } else {
             return null;
         }
     }
