@@ -22,17 +22,15 @@
         "minHeight": 768,
         "dragDropEnabled": false,
         "theme": "Dark",
-        "titleBarStyle": "Visible"
+        "titleBarStyle": "Visible",
+        "contextMenu": false
       }
     ],
     "security": {
       "csp": null,
       "freezePrototype": false
     },
-    "withGlobalTauri": true,
-    "webview": {
-      "contextMenu": false
-    }
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
