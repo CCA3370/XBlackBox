@@ -1005,9 +1005,6 @@ function calculatePathDistance(lats, lons) {
     
     return totalDistance;
 }
-        ui.hideLoading();
-    }
-}
 
 // Data Table Functions
 async function loadDataTable() {
