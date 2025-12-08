@@ -1442,16 +1442,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const timeEndSlider = document.getElementById('time-end-slider');
     const timeStartValue = document.getElementById('time-start-value');
     const timeEndValue = document.getElementById('time-end-value');
+    
+    // Time range slider constants
+    const TIME_SLIDER_MIN_GAP_SECONDS = 0.1;
+    const TIME_SLIDER_MIN_GAP_PERCENT = 0.001;
 
     function updateTimeRangeDisplay() {
         timeStartValue.textContent = state.timeRange.start.toFixed(1) + 's';
         timeEndValue.textContent = state.timeRange.end.toFixed(1) + 's';
     }
+    
+    function getMinTimeGap() {
+        return Math.max(TIME_SLIDER_MIN_GAP_SECONDS, state.timeRange.max * TIME_SLIDER_MIN_GAP_PERCENT);
+    }
 
     timeStartSlider.addEventListener('input', (e) => {
         const startValue = parseFloat(e.target.value);
         const endValue = parseFloat(timeEndSlider.value);
-        const minGap = Math.max(0.1, state.timeRange.max * 0.001); // Minimum 0.1s or 0.1% of total
+        const minGap = getMinTimeGap();
         
         // Ensure start is always less than end with minimum gap
         if (startValue >= endValue) {
@@ -1465,7 +1473,7 @@ document.addEventListener('DOMContentLoaded', () => {
     timeEndSlider.addEventListener('input', (e) => {
         const startValue = parseFloat(timeStartSlider.value);
         const endValue = parseFloat(e.target.value);
-        const minGap = Math.max(0.1, state.timeRange.max * 0.001); // Minimum 0.1s or 0.1% of total
+        const minGap = getMinTimeGap();
         
         // Ensure end is always greater than start with minimum gap
         if (endValue <= startValue) {
@@ -1509,6 +1517,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Panel collapse functionality
+    function getPanelId(panel) {
+        // Try to get ID first, then use a data attribute or specific class name
+        if (panel.id) return panel.id;
+        
+        // Look for specific panel class names
+        const classes = panel.className.split(' ');
+        for (const className of classes) {
+            if (className.endsWith('-panel')) {
+                return className;
+            }
+        }
+        
+        return null;
+    }
+    
     document.querySelectorAll('.panel-header').forEach(header => {
         header.addEventListener('click', (e) => {
             // Don't collapse if clicking on the info placeholder
@@ -1519,7 +1542,7 @@ document.addEventListener('DOMContentLoaded', () => {
             panel.classList.toggle('collapsed');
             
             // Save collapse state
-            const panelId = panel.id || panel.className.split(' ')[1];
+            const panelId = getPanelId(panel);
             if (panelId) {
                 const isCollapsed = panel.classList.contains('collapsed');
                 localStorage.setItem(`panel-${panelId}-collapsed`, isCollapsed);
@@ -1529,7 +1552,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Restore panel collapse states
     document.querySelectorAll('.panel').forEach(panel => {
-        const panelId = panel.id || panel.className.split(' ')[1];
+        const panelId = getPanelId(panel);
         if (panelId) {
             const isCollapsed = localStorage.getItem(`panel-${panelId}-collapsed`) === 'true';
             if (isCollapsed) {
