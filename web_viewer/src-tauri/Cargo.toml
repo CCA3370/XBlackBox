@@ -1,5 +1,5 @@
 [package]
-name = "XBlackBox Viewer"
+name = "XBlackBox-Viewer"
 version = "0.1.0"
 description = "XBlackBox Flight Data Recorder Viewer"
 authors = ["3370Tech"]
