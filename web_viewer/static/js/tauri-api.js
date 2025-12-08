@@ -7,6 +7,7 @@
 const isTauri = window.__TAURI__ !== undefined;
 
 // Helper function to validate JSON content-type
+// Accepts 'application/json' with or without charset (e.g., 'application/json; charset=utf-8')
 function validateJsonResponse(response) {
     const contentType = response.headers.get('content-type');
     if (!contentType || !contentType.toLowerCase().includes('application/json')) {

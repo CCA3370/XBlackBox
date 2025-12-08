@@ -101,8 +101,11 @@ pub fn validate_file_path(path_str: &str) -> Result<PathBuf, SecurityError> {
 }
 
 /// Sanitize error messages to prevent information leakage
+/// Note: This assumes error strings may contain file paths.
+/// For non-path errors, it simply truncates to 200 chars.
 pub fn sanitize_error_message(error: &str) -> String {
     // Use Path::file_name() for cross-platform path separator handling
+    // If the error is not a valid path, this will just use the whole string
     let sanitized = Path::new(error)
         .file_name()
         .and_then(|name| name.to_str())

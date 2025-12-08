@@ -86,6 +86,8 @@ impl AppLogger {
     }
     
     /// Write a log entry with the given level
+    /// Note: This holds the mutex during I/O. For high-throughput scenarios,
+    /// consider using async I/O or a separate logging thread in future versions.
     fn write_log(&self, level: &str, message: &str) {
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
         let log_entry = format!("[{}] [{}] {}\n", timestamp, level, message);
