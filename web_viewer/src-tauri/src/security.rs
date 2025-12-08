@@ -55,14 +55,8 @@ pub fn validate_file_path(path_str: &str) -> Result<PathBuf, SecurityError> {
         }
     })?;
     
-    // Check for path traversal attempts
-    // The canonical path should not contain suspicious patterns
-    let path_string = canonical_path.to_string_lossy();
-    if path_string.contains("..") {
-        return Err(SecurityError::PathTraversal(
-            "Path traversal patterns detected".to_string()
-        ));
-    }
+    // Note: After canonicalization, the path is already resolved and safe
+    // No need to check for ".." as it's been resolved to the actual path
     
     // Validate file extension
     match canonical_path.extension() {

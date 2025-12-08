@@ -130,7 +130,7 @@ state.logger.log_info("File loaded successfully");
 #### 方法 1: 使用 API / Method 1: Using API
 ```javascript
 // 在浏览器控制台中 / In browser console
-const logPath = await window.xdrApi.getLogPath();
+const logPath = await api.getLogPath();
 console.log('Log file location:', logPath);
 ```
 

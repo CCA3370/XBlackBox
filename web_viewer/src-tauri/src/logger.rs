@@ -46,7 +46,10 @@ impl AppLogger {
     
     /// Get the log directory path
     fn get_log_directory() -> Result<PathBuf, std::io::Error> {
+        // Try multiple methods to get home directory for better cross-platform support
         let home_dir = dirs::home_dir()
+            .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+            .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
             .ok_or_else(|| std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 "Could not find home directory"

@@ -28,7 +28,7 @@ Linux:   /home/<username>/.xblackbox/logs/
 在应用中点击日志按钮或在控制台中运行：
 Click the log button in the app or run in console:
 ```javascript
-const logPath = await window.xdrApi.getLogPath();
+const logPath = await api.getLogPath();
 console.log('Log path:', logPath);
 ```
 
