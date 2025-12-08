@@ -19,13 +19,11 @@
         "fullscreen": false,
         "center": true,
         "minWidth": 1024,
-        "minHeight": 768,
-        "fileDropEnabled": true
+        "minHeight": 768
       }
     ],
     "security": {
       "csp": null,
-      "dangerousRemoteDomainIpcAccess": [],
       "freezePrototype": false
     },
     "withGlobalTauri": true
@@ -53,10 +51,6 @@
         "language": "en-US"
       },
       "nsis": {
-        "license": null,
-        "installerIcon": null,
-        "headerImage": null,
-        "sidebarImage": null,
         "installMode": "currentUser",
         "languages": ["en-US", "zh-CN"],
         "displayLanguageSelector": true
