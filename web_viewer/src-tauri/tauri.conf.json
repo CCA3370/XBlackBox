@@ -20,7 +20,7 @@
         "center": true,
         "minWidth": 1024,
         "minHeight": 768,
-        "fileDropEnabled": false
+        "dragDropEnabled": false
       }
     ],
     "security": {
