@@ -1451,10 +1451,11 @@ document.addEventListener('DOMContentLoaded', () => {
     timeStartSlider.addEventListener('input', (e) => {
         const startValue = parseFloat(e.target.value);
         const endValue = parseFloat(timeEndSlider.value);
+        const minGap = Math.max(0.1, state.timeRange.max * 0.001); // Minimum 0.1s or 0.1% of total
         
-        // Ensure start is always less than end
+        // Ensure start is always less than end with minimum gap
         if (startValue >= endValue) {
-            e.target.value = Math.max(0, endValue - 0.1);
+            e.target.value = Math.max(0, endValue - minGap);
         }
         
         state.timeRange.start = parseFloat(e.target.value);
@@ -1464,10 +1465,11 @@ document.addEventListener('DOMContentLoaded', () => {
     timeEndSlider.addEventListener('input', (e) => {
         const startValue = parseFloat(timeStartSlider.value);
         const endValue = parseFloat(e.target.value);
+        const minGap = Math.max(0.1, state.timeRange.max * 0.001); // Minimum 0.1s or 0.1% of total
         
-        // Ensure end is always greater than start
+        // Ensure end is always greater than start with minimum gap
         if (endValue <= startValue) {
-            e.target.value = Math.min(state.timeRange.max, startValue + 0.1);
+            e.target.value = Math.min(state.timeRange.max, startValue + minGap);
         }
         
         state.timeRange.end = parseFloat(e.target.value);
