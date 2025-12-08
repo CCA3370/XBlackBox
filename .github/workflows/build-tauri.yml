@@ -23,7 +23,7 @@ jobs:
           - os: windows-latest
             platform: windows
             artifact_name: xblackbox-viewer.exe
-            artifact_path: web_viewer/src-tauri/target/release/app.exe
+            artifact_path: web_viewer/src-tauri/target/release/XBlackBox-Viewer.exe
           - os: macos-latest
             platform: macos
             artifact_name: XBlackBox Viewer.app
@@ -31,7 +31,7 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             artifact_name: xblackbox-viewer
-            artifact_path: web_viewer/src-tauri/target/release/app
+            artifact_path: web_viewer/src-tauri/target/release/XBlackBox-Viewer
     
     steps:
       - name: Checkout code
