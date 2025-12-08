@@ -1,7 +1,7 @@
 use chrono::Local;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 /// Logger for XBlackBox application

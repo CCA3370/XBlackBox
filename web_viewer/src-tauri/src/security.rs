@@ -55,8 +55,10 @@ pub fn validate_file_path(path_str: &str) -> Result<PathBuf, SecurityError> {
         }
     })?;
     
-    // Note: After canonicalization, the path is already resolved and safe
-    // No need to check for ".." as it's been resolved to the actual path
+    // Note: Canonicalization resolves all relative path components (including ..)
+    // to absolute paths. The path is now safe from traversal attacks.
+    // If additional directory restrictions are needed in the future, validate
+    // that the canonical path is within allowed directories here.
     
     // Validate file extension
     match canonical_path.extension() {

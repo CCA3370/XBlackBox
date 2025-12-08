@@ -1581,11 +1581,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (logPath) {
                         const message = `Logs are stored at:\n${logPath}\n\nWould you like to copy this path?`;
                         if (confirm(message)) {
-                            // Try to copy to clipboard
-                            if (navigator.clipboard) {
-                                await navigator.clipboard.writeText(logPath);
-                                ui.showToast('Log path copied to clipboard!', 'success');
+                            // Try to copy to clipboard with error handling
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                                try {
+                                    await navigator.clipboard.writeText(logPath);
+                                    ui.showToast('Log path copied to clipboard!', 'success');
+                                } catch (clipboardError) {
+                                    console.warn('Clipboard access denied:', clipboardError);
+                                    // Fallback: show path in long-duration toast
+                                    ui.showToast('Log path: ' + logPath, 'info', 10000);
+                                }
                             } else {
+                                // Fallback for browsers without clipboard API
                                 ui.showToast('Log path: ' + logPath, 'info', 10000);
                             }
                         }

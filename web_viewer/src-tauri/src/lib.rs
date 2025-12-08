@@ -661,9 +661,14 @@ async fn get_log_path(state: State<'_, AppState>) -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize logger - this is critical for debugging and security auditing
+    // We panic on logger initialization failure because:
+    // 1. Logging is essential for tracking security events and debugging issues
+    // 2. Without logging, we cannot audit file access or track potential security breaches
+    // 3. The application should not run in a degraded state without logging
     let logger = AppLogger::new().unwrap_or_else(|e| {
         eprintln!("FATAL: Failed to initialize logger: {}", e);
         eprintln!("The application requires write access to the home directory for logging.");
+        eprintln!("Please ensure you have write permissions to: ~/.xblackbox/logs/");
         panic!("Cannot initialize logging system: {}", e);
     });
     

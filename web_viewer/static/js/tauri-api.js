@@ -89,9 +89,9 @@ const api = {
                 body: JSON.stringify({ filepath: path })
             });
             
-            // Check if response is JSON
+            // Check if response is JSON (case-insensitive)
             const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
+            if (!contentType || !contentType.toLowerCase().includes('application/json')) {
                 // Don't expose content-type to prevent information leakage
                 throw new Error('Server returned an invalid response format');
             }
@@ -131,8 +131,9 @@ const api = {
                 })
             });
             
+            // Check content-type (case-insensitive)
             const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
+            if (!contentType || !contentType.toLowerCase().includes('application/json')) {
                 throw new Error('Server returned an invalid response format');
             }
             
