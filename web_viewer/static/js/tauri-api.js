@@ -70,25 +70,44 @@ const api = {
         if (isTauri) {
             try {
                 const result = await tauriApi.invoke('load_file', { filepath: path });
-                
+
+                // Handle different response types from Tauri
+                if (result === null || result === undefined) {
+                    throw new Error('No response received from Tauri backend');
+                }
+
+                // If result is a string, it might be an error message
+                if (typeof result === 'string') {
+                    throw new Error(result);
+                }
+
                 // Validate response structure
-                if (typeof result !== 'object' || result === null) {
+                if (typeof result !== 'object') {
                     throw new Error('Invalid response from server: expected object, got ' + typeof result);
                 }
-                
+
                 // Check if result has expected properties
                 if (result.success === undefined) {
                     throw new Error('Invalid response structure: missing success property');
                 }
-                
+
                 return result;
             } catch (error) {
                 console.error('Load file error:', error);
-                
-                // Return error in expected format
+
+                // Enhanced error handling for Tauri-specific errors
+                let errorMessage = error.message || 'Unknown error occurred while loading file';
+
+                // Handle Tauri-specific error formats
+                if (errorMessage.includes('<!DOCTYPE')) {
+                    errorMessage = 'Server returned HTML instead of JSON. Please check server configuration.';
+                } else if (errorMessage.includes('Unexpected token')) {
+                    errorMessage = 'Invalid response format from server. Please try again.';
+                }
+
                 return {
                     success: false,
-                    error: error.message || 'Unknown error occurred while loading file'
+                    error: errorMessage
                 };
             }
         } else {
@@ -97,7 +116,7 @@ const api = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ filepath: path })
             });
-            
+
             validateJsonResponse(response);
             return response.json();
         }

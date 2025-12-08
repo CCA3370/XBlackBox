@@ -127,6 +127,10 @@ impl AppLogger {
     
     /// Get the log file path
     pub fn get_log_path(&self) -> String {
+        // Ensure the log directory exists before returning the path
+        if let Ok(log_dir) = Self::get_log_directory() {
+            let _ = fs::create_dir_all(&log_dir);
+        }
         self.log_path.to_string_lossy().to_string()
     }
 }

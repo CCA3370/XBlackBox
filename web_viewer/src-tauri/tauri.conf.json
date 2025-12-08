@@ -20,7 +20,12 @@
         "center": true,
         "minWidth": 1024,
         "minHeight": 768,
-        "dragDropEnabled": false
+        "dragDropEnabled": false,
+        "theme": "Dark",
+        "titleBarStyle": "Visible",
+        "webview": {
+          "contextMenu": false
+        }
       }
     ],
     "security": {
@@ -32,11 +37,11 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "publisher": "XBlackBox",
-    "copyright": "Copyright (c) 2024 XBlackBox",
+    "publisher": "3370Tech",
+    "copyright": "Copyright (c) 2026 3370Tech",
     "category": "Utility",
-    "shortDescription": "Flight Data Recorder Viewer",
-    "longDescription": "XBlackBox XDR Viewer - Professional flight data analysis tool for X-Plane FDR files",
+    "shortDescription": "XBlackBox Flight Data Recorder Viewer",
+    "longDescription": "XBlackBox XDR Viewer - Professional flight data analysis tool for X-Plane XDR files",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

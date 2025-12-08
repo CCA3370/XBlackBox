@@ -1280,9 +1280,19 @@ function toggleTheme() {
     state.theme = state.theme === 'dark' ? 'light' : 'dark';
     document.body.setAttribute('data-theme', state.theme);
     localStorage.setItem('theme', state.theme);
-    
+
     const icon = document.querySelector('#btn-theme i');
     icon.className = state.theme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+
+    // Update Tauri window theme if in Tauri mode
+    if (window.isTauri) {
+        try {
+            const tauriTheme = state.theme === 'dark' ? 'Dark' : 'Light';
+            window.__TAURI__.window.getCurrentWindow().setTheme(tauriTheme);
+        } catch (error) {
+            console.warn('Failed to set Tauri window theme:', error);
+        }
+    }
 }
 
 // Tab Switching
@@ -1306,6 +1316,16 @@ document.addEventListener('DOMContentLoaded', () => {
     state.theme = savedTheme;
     document.body.setAttribute('data-theme', savedTheme);
     document.querySelector('#btn-theme i').className = savedTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+
+    // Set Tauri window theme if in Tauri mode
+    if (window.isTauri) {
+        try {
+            const tauriTheme = savedTheme === 'dark' ? 'Dark' : 'Light';
+            window.__TAURI__.window.getCurrentWindow().setTheme(tauriTheme);
+        } catch (error) {
+            console.warn('Failed to set initial Tauri window theme:', error);
+        }
+    }
 
     // Modal controls - Top bar Open button
     document.getElementById('btn-open').addEventListener('click', async () => {
