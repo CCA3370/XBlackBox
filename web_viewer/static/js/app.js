@@ -11,6 +11,7 @@ const state = {
     currentPage: 1,
     pageSize: 100,
     theme: 'dark',
+    timeRange: { start: 0, end: 0, max: 0 },
     colors: [
         '#0d7377', '#ff6b6b', '#4ecdc4', '#ffe66d', '#a8e6cf',
         '#ff8b94', '#6c5ce7', '#fd79a8', '#00b894', '#fdcb6e',
@@ -612,7 +613,12 @@ async function updatePlot() {
         
         console.log(`Data points: ${frameCount}, Downsampling: ${downsample}x`);
         
-        const data = await api.getData(state.selectedParams, downsample);
+        // Get time range from sliders
+        const timeRange = (state.timeRange.start !== 0 || state.timeRange.end !== state.timeRange.max) 
+            ? [state.timeRange.start, state.timeRange.end] 
+            : null;
+        
+        const data = await api.getData(state.selectedParams, downsample, timeRange);
         
         if (data.error) {
             throw new Error(data.error);
@@ -999,9 +1005,6 @@ function calculatePathDistance(lats, lons) {
     
     return totalDistance;
 }
-        ui.hideLoading();
-    }
-}
 
 // Data Table Functions
 async function loadDataTable() {
@@ -1112,6 +1115,27 @@ function parseServerError(error, response) {
     return { errorType: ErrorTypes.SERVER_ERROR, details: error.message };
 }
 
+// Time Range Initialization
+function initializeTimeRange(header, frameCount) {
+    const maxTime = header.duration || (frameCount * header.interval);
+    state.timeRange.max = maxTime;
+    state.timeRange.start = 0;
+    state.timeRange.end = maxTime;
+    
+    const timeStartSlider = document.getElementById('time-start-slider');
+    const timeEndSlider = document.getElementById('time-end-slider');
+    
+    if (timeStartSlider && timeEndSlider) {
+        timeStartSlider.max = maxTime;
+        timeStartSlider.value = 0;
+        timeEndSlider.max = maxTime;
+        timeEndSlider.value = maxTime;
+        
+        document.getElementById('time-start-value').textContent = '0.0s';
+        document.getElementById('time-end-value').textContent = maxTime.toFixed(1) + 's';
+    }
+}
+
 // File Handling
 async function handleFileUpload(file) {
     // Validate file first
@@ -1146,6 +1170,9 @@ async function handleFileUpload(file) {
         state.parameters = result.parameters || [];
         state.selectedParams = [];
         state.fileLoaded = true;
+
+        // Initialize time range
+        initializeTimeRange(result.header, result.frame_count);
 
         // Update UI
         ui.updateFileInfo(result.header, result.frame_count);
@@ -1212,6 +1239,9 @@ async function handlePathLoad(path) {
         state.parameters = result.parameters || [];
         state.selectedParams = [];
         state.fileLoaded = true;
+
+        // Initialize time range
+        initializeTimeRange(result.header, result.frame_count);
 
         // Update UI
         ui.updateFileInfo(result.header, result.frame_count);
@@ -1284,7 +1314,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const filePath = await api.openFileDialog();
                 if (filePath) {
-                    await handlers.loadPath(filePath);
+                    await handlePathLoad(filePath);
                 }
             } catch (error) {
                 console.error('Error opening file dialog:', error);
@@ -1407,6 +1437,61 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-refresh').addEventListener('click', updatePlot);
     document.getElementById('btn-clear').addEventListener('click', clearPlot);
 
+    // Time range sliders
+    const timeStartSlider = document.getElementById('time-start-slider');
+    const timeEndSlider = document.getElementById('time-end-slider');
+    const timeStartValue = document.getElementById('time-start-value');
+    const timeEndValue = document.getElementById('time-end-value');
+    
+    // Time range slider constants
+    const TIME_SLIDER_MIN_GAP_SECONDS = 0.1;
+    const TIME_SLIDER_MIN_GAP_PERCENT = 0.001;
+
+    function updateTimeRangeDisplay() {
+        timeStartValue.textContent = state.timeRange.start.toFixed(1) + 's';
+        timeEndValue.textContent = state.timeRange.end.toFixed(1) + 's';
+    }
+    
+    function getMinTimeGap() {
+        return Math.max(TIME_SLIDER_MIN_GAP_SECONDS, state.timeRange.max * TIME_SLIDER_MIN_GAP_PERCENT);
+    }
+
+    timeStartSlider.addEventListener('input', (e) => {
+        const startValue = parseFloat(e.target.value);
+        const endValue = parseFloat(timeEndSlider.value);
+        const minGap = getMinTimeGap();
+        
+        // Ensure start is always less than end with minimum gap
+        if (startValue >= endValue) {
+            e.target.value = Math.max(0, endValue - minGap);
+        }
+        
+        state.timeRange.start = parseFloat(e.target.value);
+        updateTimeRangeDisplay();
+    });
+
+    timeEndSlider.addEventListener('input', (e) => {
+        const startValue = parseFloat(timeStartSlider.value);
+        const endValue = parseFloat(e.target.value);
+        const minGap = getMinTimeGap();
+        
+        // Ensure end is always greater than start with minimum gap
+        if (endValue <= startValue) {
+            e.target.value = Math.min(state.timeRange.max, startValue + minGap);
+        }
+        
+        state.timeRange.end = parseFloat(e.target.value);
+        updateTimeRangeDisplay();
+    });
+
+    document.getElementById('btn-reset-time').addEventListener('click', () => {
+        timeStartSlider.value = 0;
+        timeEndSlider.value = state.timeRange.max;
+        state.timeRange.start = 0;
+        state.timeRange.end = state.timeRange.max;
+        updateTimeRangeDisplay();
+    });
+
     // Statistics
     document.getElementById('btn-calc-stats').addEventListener('click', loadStatistics);
 
@@ -1429,6 +1514,51 @@ document.addEventListener('DOMContentLoaded', () => {
         state.pageSize = parseInt(e.target.value);
         state.currentPage = 1;
         if (state.fileLoaded) loadDataTable();
+    });
+
+    // Panel collapse functionality
+    function getPanelId(panel) {
+        // Try to get ID first, then use a data attribute or specific class name
+        if (panel.id) return panel.id;
+        
+        // Look for specific panel class names
+        const classes = panel.className.split(' ');
+        for (const className of classes) {
+            if (className.endsWith('-panel')) {
+                return className;
+            }
+        }
+        
+        return null;
+    }
+    
+    document.querySelectorAll('.panel-header').forEach(header => {
+        header.addEventListener('click', (e) => {
+            // Don't collapse if clicking on the info placeholder
+            if (e.target.closest('.info-placeholder')) {
+                return;
+            }
+            const panel = header.closest('.panel');
+            panel.classList.toggle('collapsed');
+            
+            // Save collapse state
+            const panelId = getPanelId(panel);
+            if (panelId) {
+                const isCollapsed = panel.classList.contains('collapsed');
+                localStorage.setItem(`panel-${panelId}-collapsed`, isCollapsed);
+            }
+        });
+    });
+
+    // Restore panel collapse states
+    document.querySelectorAll('.panel').forEach(panel => {
+        const panelId = getPanelId(panel);
+        if (panelId) {
+            const isCollapsed = localStorage.getItem(`panel-${panelId}-collapsed`) === 'true';
+            if (isCollapsed) {
+                panel.classList.add('collapsed');
+            }
+        }
     });
 
     // Close modals on backdrop click

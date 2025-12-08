@@ -55,6 +55,25 @@ html, body {
     overflow: hidden;
     /* Smooth theme transition */
     transition: background-color 0.4s ease, color 0.4s ease;
+    /* Disable text selection by default */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/* Allow text selection for inputs, textareas, and table cells */
+input,
+textarea,
+select,
+.data-table td,
+.data-table th,
+.info-value,
+[contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
 }
 
 /* App Container */
@@ -263,6 +282,21 @@ html, body {
     background-color: var(--bg-tertiary);
     border-bottom: 1px solid var(--border-color);
     transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+}
+
+.panel-header::after {
+    content: '\f078';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    margin-left: auto;
+    font-size: 12px;
+    transition: transform 0.3s ease;
+}
+
+.panel.collapsed .panel-header::after {
+    transform: rotate(-90deg);
 }
 
 .panel-header:hover {
@@ -281,6 +315,15 @@ html, body {
 .panel-content {
     padding: 12px;
     overflow-y: auto;
+    max-height: 500px;
+    transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+}
+
+.panel.collapsed .panel-content {
+    max-height: 0;
+    opacity: 0;
+    padding: 0 12px;
+    overflow: hidden;
 }
 
 .file-info-panel .panel-content {
@@ -300,6 +343,12 @@ html, body {
     flex-direction: column;
     overflow: hidden;
     padding: 12px;
+    max-height: none;
+}
+
+.parameters-panel.collapsed .panel-content {
+    flex: 0;
+    max-height: 0;
 }
 
 /* Info Display */
@@ -724,6 +773,130 @@ html, body {
     100% {
         transform: scale(1);
     }
+}
+
+/* Time Range Slider */
+.time-range-group {
+    flex-wrap: wrap;
+}
+
+.time-range-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 250px;
+}
+
+.time-range-slider {
+    position: relative;
+    height: 40px;
+    display: flex;
+    align-items: center;
+}
+
+.time-slider {
+    position: absolute;
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    pointer-events: none;
+    outline: none;
+}
+
+.time-slider::-webkit-slider-track {
+    width: 100%;
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    border: 1px solid var(--border-color);
+}
+
+.time-slider::-moz-range-track {
+    width: 100%;
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    border: 1px solid var(--border-color);
+}
+
+.time-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: var(--accent-primary);
+    border: 2px solid white;
+    border-radius: 50%;
+    cursor: pointer;
+    pointer-events: all;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+}
+
+.time-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: var(--accent-primary);
+    border: 2px solid white;
+    border-radius: 50%;
+    cursor: pointer;
+    pointer-events: all;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+}
+
+.time-slider::-webkit-slider-thumb:hover {
+    background: var(--accent-hover);
+    transform: scale(1.15);
+}
+
+.time-slider::-moz-range-thumb:hover {
+    background: var(--accent-hover);
+    transform: scale(1.15);
+}
+
+.time-slider::-webkit-slider-thumb:active {
+    transform: scale(1.05);
+}
+
+.time-slider::-moz-range-thumb:active {
+    transform: scale(1.05);
+}
+
+#time-end-slider::-webkit-slider-thumb {
+    background: var(--success);
+}
+
+#time-end-slider::-moz-range-thumb {
+    background: var(--success);
+}
+
+.time-range-values {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 0 4px;
+}
+
+.time-range-values span:first-child,
+.time-range-values span:last-child {
+    font-weight: 500;
+    color: var(--text-primary);
+    min-width: 60px;
+}
+
+.time-range-values span:first-child {
+    text-align: left;
+}
+
+.time-range-values span:last-child {
+    text-align: right;
 }
 
 /* Plot Container */
