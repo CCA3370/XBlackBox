@@ -35,6 +35,8 @@
     "core:window:allow-set-cursor-position",
     "core:window:allow-start-dragging",
     "core:webview:allow-print",
+    "core:webview:allow-create-webview-window",
+    "core:webview:deny-context-menu",
     "dialog:allow-open",
     "dialog:allow-save",
     "dialog:allow-message",
