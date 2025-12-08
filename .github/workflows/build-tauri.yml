@@ -41,9 +41,30 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Cache Node modules
+        uses: actions/cache@v4
+        with:
+          path: web_viewer/node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('web_viewer/package-lock.json','web_viewer/package.json') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-
+            node-modules-
       
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry & target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            web_viewer/src-tauri/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('web_viewer/src-tauri/Cargo.toml','web_viewer/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+            cargo-
       
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -54,7 +75,7 @@ jobs:
       
       - name: Install frontend dependencies
         working-directory: web_viewer
-        run: npm install
+        run: npm ci
       
       - name: Build Tauri app
         working-directory: web_viewer

@@ -32,8 +32,8 @@
     "withGlobalTauri": true
   },
   "bundle": {
-    "active": true,
-    "targets": "all",
+  "active": false,
+  "targets": "all",
     "publisher": "3370Tech",
     "copyright": "Copyright (c) 2026 3370Tech",
     "category": "Utility",

@@ -317,8 +317,6 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
     let mut phases = Vec::new();
     let mut max_altitude = 0.0;
     let mut max_speed = 0.0;
-    let mut fuel_flow_sum;
-    let mut fuel_flow_count;
     let mut landing_g = None;
     let mut altitudes = Vec::new(); // Store for later use
 
@@ -501,8 +499,9 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
     let average_fuel_flow = if let Some(ff_i) = fuel_flow_idx {
         let (_, fuel_flows) = data.get_parameter_data(ff_i, 0, None, 1);
         if !fuel_flows.is_empty() {
-            fuel_flow_sum = fuel_flows.iter().sum();
-            fuel_flow_count = fuel_flows.len();
+            // Ensure the sum has an explicit numeric type
+            let fuel_flow_sum: f64 = fuel_flows.iter().copied().sum::<f64>();
+            let fuel_flow_count = fuel_flows.len();
             Some(fuel_flow_sum / fuel_flow_count as f64)
         } else {
             None
