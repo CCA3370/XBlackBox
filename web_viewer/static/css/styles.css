@@ -23,6 +23,9 @@
     --radius-md: 8px;
     --radius-lg: 12px;
     --transition: all 0.2s ease;
+    /* Titlebar background used for custom/frameless windows */
+    --titlebar-bg: rgba(26,26,26,0.6);
+    --titlebar-rgb: 26,26,26;
 }
 
 [data-theme="light"] {
@@ -37,6 +40,8 @@
     --text-disabled: #a0a0a0;
     --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.08);
+    --titlebar-bg: rgba(245,245,245,0.85);
+    --titlebar-rgb: 245,245,245;
 }
 
 * {
@@ -101,10 +106,15 @@ select,
     justify-content: space-between;
     height: 52px;
     padding: 0 16px;
-    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
-    border-bottom: 1px solid var(--border-color);
+    /* semi-transparent titlebar that maps to theme */
+    background-color: var(--titlebar-bg);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(var(--titlebar-rgb), 0.12);
     flex-shrink: 0;
     animation: headerSlideDown 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Make header draggable for frameless windows */
+    -webkit-app-region: drag;
 }
 
 @keyframes headerSlideDown {
@@ -147,6 +157,38 @@ select,
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+/* Ensure interactive controls are not part of the draggable region */
+.app-header .btn,
+.app-header .btn *,
+.app-header .window-controls,
+.app-header .window-controls * {
+    -webkit-app-region: no-drag;
+}
+
+.window-controls {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.window-controls .win-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+}
+
+.window-controls .close-btn {
+    background: transparent;
+}
+
+.window-controls .close-btn:hover {
+    background: rgba(255, 70, 70, 0.12);
 }
 
 .header-nav .divider {

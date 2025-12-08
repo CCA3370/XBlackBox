@@ -1365,6 +1365,61 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('close-modal').addEventListener('click', () => ui.hideModal('file-modal'));
 
+    // Window control buttons (for frameless Tauri windows)
+    const btnMin = document.getElementById('btn-win-min');
+    const btnMax = document.getElementById('btn-win-max');
+    const btnClose = document.getElementById('btn-win-close');
+
+    if (btnMin) {
+        btnMin.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (window.isTauri) {
+                try {
+                    const win = window.__TAURI__.window.getCurrentWindow();
+                    if (win && typeof win.minimize === 'function') await win.minimize();
+                } catch (err) {
+                    console.warn('Failed to minimize window:', err);
+                }
+            }
+        });
+    }
+
+    if (btnMax) {
+        btnMax.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (window.isTauri) {
+                try {
+                    const win = window.__TAURI__.window.getCurrentWindow();
+                    if (!win) return;
+                    const isMax = (typeof win.isMaximized === 'function') ? await win.isMaximized() : false;
+                    if (isMax) {
+                        if (typeof win.unmaximize === 'function') await win.unmaximize();
+                        btnMax.querySelector('i').className = 'fas fa-window-maximize';
+                    } else {
+                        if (typeof win.maximize === 'function') await win.maximize();
+                        btnMax.querySelector('i').className = 'fas fa-window-restore';
+                    }
+                } catch (err) {
+                    console.warn('Failed to toggle maximize:', err);
+                }
+            }
+        });
+    }
+
+    if (btnClose) {
+        btnClose.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (window.isTauri) {
+                try {
+                    const win = window.__TAURI__.window.getCurrentWindow();
+                    if (win && typeof win.close === 'function') await win.close();
+                } catch (err) {
+                    console.warn('Failed to close window:', err);
+                }
+            }
+        });
+    }
+
     // File Info Panel click - only works when no file is loaded
     const fileInfoPanel = document.getElementById('file-info');
     const infoPlaceholder = fileInfoPanel.querySelector('.info-placeholder');
