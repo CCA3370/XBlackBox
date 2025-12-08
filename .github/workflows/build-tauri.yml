@@ -81,16 +81,8 @@ jobs:
         if: runner.os == 'macOS'
         working-directory: web_viewer
         run: |
-          python3 - << 'PY'
-            import json
-            p='src-tauri/tauri.conf.json'
-            with open(p,'r',encoding='utf-8') as f:
-                j=json.load(f)
-            j.setdefault('bundle',{})['active']=True
-            with open(p,'w',encoding='utf-8') as f:
-                json.dump(j,f,ensure_ascii=False,indent=2)
-            print('Enabled bundle.active in',p)
-          PY
+          # Use Node to modify tauri.conf.json to avoid heredoc indentation issues
+          node -e "const fs=require('fs');const p='src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));j.bundle=j.bundle||{};j.bundle.active=true;fs.writeFileSync(p,JSON.stringify(j,null,2));console.log('Enabled bundle.active in',p);"
 
       - name: Build Tauri app
         working-directory: web_viewer
