@@ -5,7 +5,6 @@
 
 // Check if we're running in Tauri
 const isTauri = window.__TAURI__ !== undefined;
-
 // Helper function to validate JSON content-type
 // Accepts 'application/json' with or without charset (e.g., 'application/json; charset=utf-8')
 function validateJsonResponse(response) {
@@ -61,6 +60,28 @@ const tauriApi = isTauri ? {
         }
     }
 } : null;
+
+// Safe wrapper to set native window theme. This centralizes platform differences
+// and prevents runtime errors when the API is unavailable.
+if (isTauri && typeof tauriApi === 'object' && tauriApi !== null) {
+    tauriApi.setWindowTheme = async function(theme) {
+        try {
+            if (window.__TAURI__ && window.__TAURI__.window) {
+                const getter = window.__TAURI__.window.getCurrentWindow;
+                if (typeof getter === 'function') {
+                    const win = getter();
+                    if (win && typeof win.setTheme === 'function') {
+                        return await win.setTheme(theme);
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to set native window theme via tauri:', err);
+        }
+        // no-op fallback
+        return null;
+    };
+}
 
 // API Functions adapted for Tauri
 const api = {
@@ -257,4 +278,6 @@ const api = {
 
 // Export for use in main app
 window.xdrApi = api;
+// keep legacy global name `api` for older code that expects it
+window.api = api;
 window.isTauri = isTauri;

@@ -1288,7 +1288,17 @@ function toggleTheme() {
     if (window.isTauri) {
         try {
             const tauriTheme = state.theme === 'dark' ? 'Dark' : 'Light';
-            window.__TAURI__.window.getCurrentWindow().setTheme(tauriTheme);
+            // prefer the wrapper exposed by tauri-api.js
+            if (window.xdrApi && typeof window.xdrApi.setWindowTheme === 'function') {
+                // non-blocking; log failures
+                window.xdrApi.setWindowTheme(tauriTheme).catch(err => console.warn('Failed to set Tauri window theme:', err));
+            } else {
+                try {
+                    window.__TAURI__.window.getCurrentWindow().setTheme(tauriTheme);
+                } catch (err) {
+                    console.warn('Failed to set Tauri window theme (fallback):', err);
+                }
+            }
         } catch (error) {
             console.warn('Failed to set Tauri window theme:', error);
         }
@@ -1321,7 +1331,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.isTauri) {
         try {
             const tauriTheme = savedTheme === 'dark' ? 'Dark' : 'Light';
-            window.__TAURI__.window.getCurrentWindow().setTheme(tauriTheme);
+            if (window.xdrApi && typeof window.xdrApi.setWindowTheme === 'function') {
+                window.xdrApi.setWindowTheme(tauriTheme).catch(err => console.warn('Failed to set initial Tauri window theme:', err));
+            } else {
+                try {
+                    window.__TAURI__.window.getCurrentWindow().setTheme(tauriTheme);
+                } catch (err) {
+                    console.warn('Failed to set initial Tauri window theme (fallback):', err);
+                }
+            }
         } catch (error) {
             console.warn('Failed to set initial Tauri window theme:', error);
         }
