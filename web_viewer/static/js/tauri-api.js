@@ -19,7 +19,9 @@ function validateJsonResponse(response) {
 const tauriApi = isTauri ? {
     async invoke(cmd, args = {}) {
         try {
-            return await window.__TAURI__.core.invoke(cmd, args);
+            // Use the public invoke API. Avoid internal `core.invoke` which may behave differently
+            // across platforms or versions.
+            return await window.__TAURI__.invoke(cmd, args);
         } catch (error) {
             // Handle Tauri invoke errors properly
             console.error(`Tauri invoke error for ${cmd}:`, error);
@@ -34,18 +36,25 @@ const tauriApi = isTauri ? {
     
     async openDialog() {
         const { open } = window.__TAURI__.dialog;
-        return await open({
+        const res = await open({
             multiple: false,
             filters: [{
                 name: 'XDR Files',
                 extensions: ['xdr']
             }]
         });
+
+        // Tauri may return a string or an array depending on options/platform.
+        // Normalize to a single string path (take the first entry if array).
+        if (Array.isArray(res)) {
+            return res.length > 0 ? res[0] : null;
+        }
+        return res;
     },
     
     async getLogPath() {
         try {
-            return await window.__TAURI__.core.invoke('get_log_path');
+            return await window.__TAURI__.invoke('get_log_path');
         } catch (error) {
             console.error('Failed to get log path:', error);
             return null;
