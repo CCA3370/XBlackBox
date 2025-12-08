@@ -8,7 +8,7 @@ const MAX_FILE_SIZE: u64 = 500 * 1024 * 1024;
 #[derive(Debug)]
 pub enum SecurityError {
     InvalidPath(String),
-    PathTraversal(String),
+    _PathTraversal(String),
     FileTooBig(u64),
     FileNotFound(String),
     InvalidExtension(String),
@@ -19,7 +19,7 @@ impl std::fmt::Display for SecurityError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SecurityError::InvalidPath(msg) => write!(f, "Invalid path: {}", msg),
-            SecurityError::PathTraversal(msg) => write!(f, "Path traversal detected: {}", msg),
+            SecurityError::_PathTraversal(msg) => write!(f, "Path traversal detected: {}", msg),
             SecurityError::FileTooBig(size) => write!(f, "File too large: {} bytes (max: {} bytes)", size, MAX_FILE_SIZE),
             SecurityError::FileNotFound(msg) => write!(f, "File not found: {}", msg),
             SecurityError::InvalidExtension(msg) => write!(f, "Invalid file extension: {}", msg),

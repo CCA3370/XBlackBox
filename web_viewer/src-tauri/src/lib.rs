@@ -317,8 +317,8 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
     let mut phases = Vec::new();
     let mut max_altitude = 0.0;
     let mut max_speed = 0.0;
-    let mut fuel_flow_sum = 0.0;
-    let mut fuel_flow_count = 0;
+    let mut fuel_flow_sum;
+    let mut fuel_flow_count;
     let mut landing_g = None;
     let mut altitudes = Vec::new(); // Store for later use
 
@@ -330,7 +330,6 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
         
         // Detect flight phases based on altitude
         let mut in_flight = false;
-        let mut phase_start_time = 0.0;
         let total_frames = data.frames.len();
         
         for (i, frame) in data.frames.iter().enumerate() {
@@ -347,7 +346,6 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
             if !in_flight && alt > ALTITUDE_THRESHOLD_AGL {
                 // Takeoff detected
                 in_flight = true;
-                phase_start_time = frame.timestamp;
                 phases.push(FlightPhase {
                     name: "Takeoff".to_string(),
                     start_time: frame.timestamp,
@@ -386,8 +384,6 @@ async fn analyze_flight(state: State<'_, AppState>) -> Result<FlightAnalysis, St
                         }
                     }
                 }
-                
-                in_flight = false;
                 
                 // Record landing G-force if available
                 if let Some(g_i) = g_force_idx {
