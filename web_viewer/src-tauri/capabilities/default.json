@@ -34,7 +34,7 @@
     "core:window:allow-set-cursor-icon",
     "core:window:allow-set-cursor-position",
     "core:window:allow-start-dragging",
-    "core:window:allow-print",
+    "core:webview:allow-print",
     "dialog:allow-open",
     "dialog:allow-save",
     "dialog:allow-message",
