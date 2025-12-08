@@ -8,8 +8,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::State;
-use tauri::Manager;
-
 
 // Global state for XDR data and logger
 struct AppState {
@@ -691,13 +689,8 @@ pub fn run() {
                         .build(),
                 )?;
             }
-
-            let window = app.get_webview_window("main").unwrap();
-            window.set_disable_browser_context_menu(true)?;
-
             Ok(())
         })
-
         .invoke_handler(tauri::generate_handler![
             load_file,
             get_data,

@@ -1361,6 +1361,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    document.addEventListener("mousedown", (e) => {
+        if (e.button === 2) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        }
+    }, true);
+
+    window.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return false;
+    }, true);
+
+
     // File input handler
     document.getElementById('file-input').addEventListener('change', (e) => {
         const file = e.target.files[0];
