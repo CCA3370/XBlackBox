@@ -6,6 +6,14 @@
 // Check if we're running in Tauri
 const isTauri = window.__TAURI__ !== undefined;
 
+// Helper function to validate JSON content-type
+function validateJsonResponse(response) {
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.toLowerCase().includes('application/json')) {
+        throw new Error('Server returned an invalid response format');
+    }
+}
+
 // Tauri API wrapper
 const tauriApi = isTauri ? {
     async invoke(cmd, args = {}) {
@@ -89,13 +97,7 @@ const api = {
                 body: JSON.stringify({ filepath: path })
             });
             
-            // Check if response is JSON (case-insensitive)
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.toLowerCase().includes('application/json')) {
-                // Don't expose content-type to prevent information leakage
-                throw new Error('Server returned an invalid response format');
-            }
-            
+            validateJsonResponse(response);
             return response.json();
         }
     },
@@ -131,12 +133,7 @@ const api = {
                 })
             });
             
-            // Check content-type (case-insensitive)
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.toLowerCase().includes('application/json')) {
-                throw new Error('Server returned an invalid response format');
-            }
-            
+            validateJsonResponse(response);
             return response.json();
         }
     },

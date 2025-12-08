@@ -62,7 +62,7 @@ pub fn validate_file_path(path_str: &str) -> Result<PathBuf, SecurityError> {
     
     // Validate file extension
     match canonical_path.extension() {
-        Some(ext) if ext.eq_ignore_ascii_case("xdr") => {},
+        Some(ext) if ext.to_string_lossy().eq_ignore_ascii_case("xdr") => {},
         Some(ext) => {
             return Err(SecurityError::InvalidExtension(
                 format!("Expected .xdr file, got .{}", ext.to_string_lossy())
@@ -102,9 +102,10 @@ pub fn validate_file_path(path_str: &str) -> Result<PathBuf, SecurityError> {
 
 /// Sanitize error messages to prevent information leakage
 pub fn sanitize_error_message(error: &str) -> String {
-    // Remove full paths from error messages, keep only filename
-    let sanitized = error.split(|c| c == '/' || c == '\\')
-        .last()
+    // Use Path::file_name() for cross-platform path separator handling
+    let sanitized = Path::new(error)
+        .file_name()
+        .and_then(|name| name.to_str())
         .unwrap_or(error);
     
     // Limit error message length

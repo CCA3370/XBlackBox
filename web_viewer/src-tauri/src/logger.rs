@@ -92,8 +92,13 @@ impl AppLogger {
         
         if let Ok(mut file_guard) = self.log_file.lock() {
             if let Some(ref mut file) = *file_guard {
-                let _ = file.write_all(log_entry.as_bytes());
-                let _ = file.flush();
+                // Log write failures to stderr as we can't log them to the file
+                if let Err(e) = file.write_all(log_entry.as_bytes()) {
+                    eprintln!("Warning: Failed to write to log file: {}", e);
+                }
+                if let Err(e) = file.flush() {
+                    eprintln!("Warning: Failed to flush log file: {}", e);
+                }
             }
         }
     }
