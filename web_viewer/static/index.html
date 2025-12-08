@@ -395,6 +395,9 @@
         } else {
             console.log('Running in web mode');
         }
+        document.addEventListener("DOMContentLoaded", () => {
+            disableContextMenu();
+        });
     </script>
     <script src="js/tauri-api.js"></script>
     <script src="js/app.js"></script>

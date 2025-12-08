@@ -22,9 +22,7 @@
         "minHeight": 768,
         "dragDropEnabled": false,
         "theme": "Dark",
-        "titleBarStyle": "Visible",
-        "label": "main",
-        "contextMenu": false
+        "titleBarStyle": "Visible"
       }
     ],
     "security": {

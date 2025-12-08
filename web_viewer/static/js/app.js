@@ -1361,20 +1361,31 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    document.addEventListener("mousedown", (e) => {
-        if (e.button === 2) {
+    // 最强力的右键拦截，兼容 Tauri v2 + WebView2
+    function disableContextMenu() {
+        window.addEventListener("contextmenu", (e) => {
             e.preventDefault();
-            e.stopPropagation();
+            e.stopImmediatePropagation();
             return false;
+        }, true);
+
+    window.addEventListener("mousedown", (e) => {
+        if (e.button === 2) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return false;
         }
     }, true);
 
-    window.addEventListener("contextmenu", (e) => {
+    window.addEventListener("mouseup", (e) => {
+        if (e.button === 2) {
         e.preventDefault();
-        e.stopPropagation();
         e.stopImmediatePropagation();
         return false;
+        }
     }, true);
+    }
+
 
 
     // File input handler
