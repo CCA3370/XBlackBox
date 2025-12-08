@@ -660,10 +660,10 @@ async fn get_log_path(state: State<'_, AppState>) -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Initialize logger
+    // Initialize logger - this is critical for debugging and security auditing
     let logger = AppLogger::new().unwrap_or_else(|e| {
-        eprintln!("Failed to initialize logger: {}", e);
-        // Create a fallback logger that writes to stderr
+        eprintln!("FATAL: Failed to initialize logger: {}", e);
+        eprintln!("The application requires write access to the home directory for logging.");
         panic!("Cannot initialize logging system: {}", e);
     });
     

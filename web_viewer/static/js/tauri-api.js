@@ -92,7 +92,8 @@ const api = {
             // Check if response is JSON
             const contentType = response.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
-                throw new Error(`Server returned non-JSON response: ${contentType || 'unknown'}`);
+                // Don't expose content-type to prevent information leakage
+                throw new Error('Server returned an invalid response format');
             }
             
             return response.json();
@@ -132,7 +133,7 @@ const api = {
             
             const contentType = response.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
-                throw new Error('Server returned non-JSON response');
+                throw new Error('Server returned an invalid response format');
             }
             
             return response.json();

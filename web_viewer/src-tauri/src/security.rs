@@ -101,7 +101,7 @@ pub fn validate_file_path(path_str: &str) -> Result<PathBuf, SecurityError> {
 /// Sanitize error messages to prevent information leakage
 pub fn sanitize_error_message(error: &str) -> String {
     // Remove full paths from error messages, keep only filename
-    let sanitized = error.split(&['/', '\\'][..])
+    let sanitized = error.split(|c| c == '/' || c == '\\')
         .last()
         .unwrap_or(error);
     

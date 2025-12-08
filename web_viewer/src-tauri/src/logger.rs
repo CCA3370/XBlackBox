@@ -59,7 +59,7 @@ impl AppLogger {
     }
     
     /// Rotate logs - keep only last 30 days of logs
-    fn rotate_logs(log_dir: &PathBuf) -> Result<(), std::io::Error> {
+    fn rotate_logs(log_dir: &Path) -> Result<(), std::io::Error> {
         let entries = fs::read_dir(log_dir)?;
         let mut log_files: Vec<(PathBuf, std::time::SystemTime)> = Vec::new();
         
