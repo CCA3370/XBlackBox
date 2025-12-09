@@ -99,7 +99,16 @@ const api = {
     async loadFile(path) {
         if (isTauri) {
             try {
+                console.debug('[tauri-api] loadFile invoke', { isTauri, path });
                 const result = await tauriApi.invoke('load_file', { filepath: path });
+                console.debug('[tauri-api] loadFile result type:', typeof result);
+
+                // Defensive: sometimes an HTML error page (from dev server or other)
+                // may be returned accidentally. Detect and wrap it for clearer UI handling.
+                if (typeof result === 'string' && result.trim().startsWith('<')) {
+                    console.error('[tauri-api] loadFile received HTML instead of JSON/obj. Raw:', result.slice(0, 512));
+                    return { success: false, error: 'Received HTML from backend', raw: result };
+                }
 
                 // Handle different response types from Tauri
                 if (result === null || result === undefined) {
@@ -146,6 +155,14 @@ const api = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ filepath: path })
             });
+
+            // Validate content-type; if it's HTML, include raw snippet for debugging
+            const ct = response.headers.get('content-type') || '';
+            if (ct.toLowerCase().includes('text/html')) {
+                const raw = await response.text();
+                console.error('[tauri-api] loadFile fetch returned HTML:', raw.slice(0, 512));
+                return { success: false, error: 'Server returned HTML instead of JSON', raw };
+            }
 
             validateJsonResponse(response);
             return response.json();
